@@ -1,0 +1,17 @@
+server:
+  port: ${CONNECTION_SERVICE_PORT:8084}
+
+spring:
+  application:
+    name: connection-service
+
+# Other services this one calls. Kept in configuration rather than hard-coded
+# in Java, so they can be repointed without a rebuild.
+services:
+  user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

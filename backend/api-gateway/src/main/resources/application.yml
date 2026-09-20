@@ -1,0 +1,33 @@
+server:
+  port: ${GATEWAY_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: user-service
+              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/users/**,/api/students/**,/api/courses/**,/api/admin/**
+            - id: matching-service
+              uri: ${MATCHING_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/matching/**
+            - id: connection-service
+              uri: ${CONNECTION_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/match-requests/**,/api/connections/**
+            - id: group-service
+              uri: ${GROUP_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/api/groups/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
