@@ -1,13 +1,14 @@
-package com.studybuddy.common.model;
+package com.studybuddy.user.model;
 
 import java.time.LocalTime;
 
 /**
  * A recurring weekly availability window, for example "WEDNESDAY 19:00-21:00".
  *
- * Shared between services so that matching-service does not reimplement the
- * overlap calculation that user-service and group-service rely on. Two copies
- * of that logic would eventually disagree about whether two students can meet.
+ * Every service that handles availability keeps its own copy of this class.
+ * The overlap methods must behave identically in each copy: if matching-service
+ * and group-service disagree about whether two students can meet, users see
+ * contradictory results. Change all copies together.
  */
 public class TimeSlot {
 

@@ -19,7 +19,6 @@
 	<description>Study Buddy Matcher System - IS442 OOP Project</description>
 
 	<modules>
-		<module>common</module>
 		<module>api-gateway</module>
 		<module>user-service</module>
 		<module>matching-service</module>
@@ -34,11 +33,6 @@
 
 	<dependencyManagement>
 		<dependencies>
-			<dependency>
-				<groupId>com.studybuddy</groupId>
-				<artifactId>common</artifactId>
-				<version>${project.version}</version>
-			</dependency>
 			<dependency>
 				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-dependencies</artifactId>

@@ -1,15 +1,20 @@
-package com.studybuddy.common.dto;
+package com.studybuddy.connection.dto;
 
-import com.studybuddy.common.enums.AccountStatus;
-import com.studybuddy.common.enums.MeetingMode;
-import com.studybuddy.common.enums.StudyGoal;
-import com.studybuddy.common.model.TimeSlot;
+import com.studybuddy.connection.model.AccountStatus;
+import com.studybuddy.connection.model.MeetingMode;
+import com.studybuddy.connection.model.StudyGoal;
+import com.studybuddy.connection.model.TimeSlot;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A student profile as sent between services.
+ * A student profile as received from user-service.
+ *
+ * Every service that handles student data keeps its own copy of this class.
+ * The JSON field names are the contract between them, and user-service's copy
+ * is the source of truth. A field renamed in one copy but not the others still
+ * compiles - the value just arrives empty - so change all copies together.
  *
  * There is deliberately no contactNumber field. The brief requires the contact
  * number to stay hidden until a match request has been accepted, and leaving it

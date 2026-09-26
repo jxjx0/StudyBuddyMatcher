@@ -1,6 +1,6 @@
 package com.studybuddy.user.service;
 
-import com.studybuddy.common.dto.CourseDto;
+import com.studybuddy.user.dto.CourseDto;
 import com.studybuddy.user.repository.CourseRepository;
 import org.springframework.stereotype.Service;
 

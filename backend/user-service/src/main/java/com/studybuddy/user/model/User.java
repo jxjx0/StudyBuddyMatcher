@@ -1,7 +1,5 @@
 package com.studybuddy.user.model;
 
-import com.studybuddy.common.enums.AccountStatus;
-
 /**
  * Base type for every account. Extended by Student and SystemAdministrator.
  */

@@ -1,9 +1,5 @@
 package com.studybuddy.group.model;
 
-import com.studybuddy.common.enums.MeetingMode;
-import com.studybuddy.common.enums.StudyGoal;
-import com.studybuddy.common.model.TimeSlot;
-
 import java.util.ArrayList;
 
 /**

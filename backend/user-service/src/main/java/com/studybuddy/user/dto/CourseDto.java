@@ -1,7 +1,7 @@
-package com.studybuddy.common.dto;
+package com.studybuddy.user.dto;
 
 /**
- * A course as sent between services.
+ * A course as sent to other services.
  */
 public class CourseDto {
 

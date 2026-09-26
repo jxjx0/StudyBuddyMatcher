@@ -1,4 +1,4 @@
-package com.studybuddy.common.enums;
+package com.studybuddy.user.model;
 
 public enum StudyGoal {
 	CONCEPT_REVIEW,

@@ -1,4 +1,4 @@
-package com.studybuddy.common.enums;
+package com.studybuddy.connection.model;
 
 public enum MeetingMode {
 	IN_PERSON,

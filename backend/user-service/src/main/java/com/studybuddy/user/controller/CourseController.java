@@ -1,6 +1,6 @@
 package com.studybuddy.user.controller;
 
-import com.studybuddy.common.dto.CourseDto;
+import com.studybuddy.user.dto.CourseDto;
 import com.studybuddy.user.service.CourseService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

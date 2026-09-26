@@ -1,6 +1,6 @@
 package com.studybuddy.user.service;
 
-import com.studybuddy.common.enums.AccountStatus;
+import com.studybuddy.user.model.AccountStatus;
 import com.studybuddy.user.model.User;
 import com.studybuddy.user.repository.UserRepository;
 import org.springframework.stereotype.Service;

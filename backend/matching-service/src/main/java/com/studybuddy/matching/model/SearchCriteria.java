@@ -1,8 +1,5 @@
 package com.studybuddy.matching.model;
 
-import com.studybuddy.common.enums.MeetingMode;
-import com.studybuddy.common.enums.StudyGoal;
-
 /**
  * What a student is searching for.
  *

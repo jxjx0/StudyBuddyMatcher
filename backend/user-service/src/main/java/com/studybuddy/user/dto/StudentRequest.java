@@ -1,7 +1,7 @@
 package com.studybuddy.user.dto;
 
-import com.studybuddy.common.enums.MeetingMode;
-import com.studybuddy.common.enums.StudyGoal;
+import com.studybuddy.user.model.MeetingMode;
+import com.studybuddy.user.model.StudyGoal;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 
@@ -9,9 +9,6 @@ import java.util.List;
 
 /**
  * Payload for creating or updating a student profile.
- *
- * Local to user-service rather than shared, because it is an input shape no
- * other service sends.
  */
 public class StudentRequest {
 

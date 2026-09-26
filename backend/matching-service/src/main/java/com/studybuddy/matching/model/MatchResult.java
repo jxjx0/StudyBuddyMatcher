@@ -1,6 +1,6 @@
 package com.studybuddy.matching.model;
 
-import com.studybuddy.common.dto.StudentDto;
+import com.studybuddy.matching.dto.StudentDto;
 
 import java.util.ArrayList;
 import java.util.List;

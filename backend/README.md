@@ -16,8 +16,6 @@ You need **JDK 21 or higher** (`java -version`). Maven is not needed.
 3. In the Explorer sidebar, open **SPRING BOOT DASHBOARD → Apps**
 4. Start the five apps
 
-You'll see five, not six - `common` is a library, so there's nothing to run.
-
 If a service shows a spinner instead of a green dot, it's usually running
 anyway. Check with `curl http://localhost:8081/actuator/health`.
 
@@ -68,7 +66,6 @@ backend/
 ├── pom.xml              lists the modules and sets the Java/Spring versions
 ├── mvnw, mvnw.cmd       build tool (see below) - never edited
 │
-├── common/              shared enums and DTOs - a library, not an app
 ├── api-gateway/         routes requests to the services
 ├── user-service/
 ├── matching-service/
@@ -93,8 +90,8 @@ user-service/
         ├── controller/                  StudentController, CourseController, AdminController
         ├── service/                     StudentService, UserAccountService, CourseService
         ├── repository/                  UserRepository, CourseRepository
-        ├── model/                       User, Student, SystemAdministrator, Course
-        └── dto/                         StudentRequest
+        ├── model/                       User, Student, SystemAdministrator, Course, enums, TimeSlot
+        └── dto/                         StudentRequest, StudentDto, StudentContactDto, CourseDto
 ```
 
 ## How it's organised
@@ -148,7 +145,6 @@ and only let the repository touch data.
 | `matching-service`   | 8083 | Matching engine and strategies                     |
 | `connection-service` | 8084 | Match requests and connections                     |
 | `group-service`      | 8085 | Study groups and join requests                     |
-| `common`             | -    | Shared enums and DTOs - a library, not an app      |
 
 ## Clients - how services ask each other for data
 
@@ -156,6 +152,31 @@ This whole idea only exists because we chose microservices. In a single
 application you would just write `student.getName()`, because every class
 would be in the same program. Splitting into separate services means the data
 lives elsewhere, so it has to be fetched over the network instead.
+
+## Duplicated classes - keep the copies in step
+
+There is no shared module. Each service keeps its own copy of the classes it
+sends or receives, so every service builds and runs on its own.
+
+| Class                                      | Copies in                              |
+|--------------------------------------------|----------------------------------------|
+| `StudentDto`, `CourseDto`                  | user, matching, connection, group      |
+| `StudentContactDto`                        | user, connection                       |
+| `AccountStatus`, `MeetingMode`, `StudyGoal` | user, matching, connection, group      |
+| `TimeSlot`                                 | user, matching, connection, group      |
+
+The price is that the compiler no longer checks the copies against each other.
+Services exchange JSON, and the field names are the contract:
+
+- **Rename a field in one copy only** and it still compiles - the value just
+  arrives empty on the other side.
+- **Add an enum value in one copy only** and the other services fail to read
+  any student that uses it.
+- **`TimeSlot.overlapMinutes` must behave the same everywhere**, or matching
+  and groups will disagree about whether two students can meet.
+
+`user-service` owns student data, so its copies are the source of truth. When
+you change one of these classes, change every copy in the same commit.
 
 
 ## The API gateway

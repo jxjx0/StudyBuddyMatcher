@@ -1,6 +1,6 @@
 package com.studybuddy.user.controller;
 
-import com.studybuddy.common.enums.AccountStatus;
+import com.studybuddy.user.model.AccountStatus;
 import com.studybuddy.user.model.User;
 import com.studybuddy.user.service.UserAccountService;
 import org.springframework.http.ResponseEntity;

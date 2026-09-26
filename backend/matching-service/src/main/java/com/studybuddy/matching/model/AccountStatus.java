@@ -1,4 +1,4 @@
-package com.studybuddy.common.enums;
+package com.studybuddy.matching.model;
 
 public enum AccountStatus {
 	ACTIVE,

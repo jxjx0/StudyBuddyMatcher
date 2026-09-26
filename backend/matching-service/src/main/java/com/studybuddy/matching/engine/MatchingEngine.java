@@ -1,6 +1,6 @@
 package com.studybuddy.matching.engine;
 
-import com.studybuddy.common.dto.StudentDto;
+import com.studybuddy.matching.dto.StudentDto;
 import com.studybuddy.matching.client.StudentClient;
 import com.studybuddy.matching.service.MatchingConfigurationService;
 import com.studybuddy.matching.model.MatchResult;

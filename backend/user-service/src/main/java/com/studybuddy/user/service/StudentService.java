@@ -1,7 +1,7 @@
 package com.studybuddy.user.service;
 
-import com.studybuddy.common.dto.StudentContactDto;
-import com.studybuddy.common.dto.StudentDto;
+import com.studybuddy.user.dto.StudentContactDto;
+import com.studybuddy.user.dto.StudentDto;
 import com.studybuddy.user.dto.StudentRequest;
 import com.studybuddy.user.repository.CourseRepository;
 import com.studybuddy.user.repository.UserRepository;

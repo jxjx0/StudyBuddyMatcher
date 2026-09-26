@@ -1,7 +1,7 @@
 package com.studybuddy.connection.client;
 
-import com.studybuddy.common.dto.StudentContactDto;
-import com.studybuddy.common.dto.StudentDto;
+import com.studybuddy.connection.dto.StudentContactDto;
+import com.studybuddy.connection.dto.StudentDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;

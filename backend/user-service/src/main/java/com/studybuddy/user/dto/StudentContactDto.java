@@ -1,4 +1,4 @@
-package com.studybuddy.common.dto;
+package com.studybuddy.user.dto;
 
 /**
  * Contact details for a student, kept separate from {@link StudentDto} so that
