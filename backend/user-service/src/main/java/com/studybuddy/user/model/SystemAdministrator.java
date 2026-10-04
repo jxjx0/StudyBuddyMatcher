@@ -15,6 +15,11 @@ public class SystemAdministrator extends User {
 	public SystemAdministrator() {
 	}
 
+	public SystemAdministrator(String userId, String email, String passwordHash, String name) {
+		super(userId, email, passwordHash, AccountStatus.ACTIVE);
+		this.name = name;
+	}
+
 	public String getName() {
 		return name;
 	}

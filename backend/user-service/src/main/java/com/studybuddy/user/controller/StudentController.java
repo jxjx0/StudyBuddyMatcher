@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
 
@@ -48,11 +51,14 @@ public class StudentController {
 	 * Contact details for a matched student. Called by connection-service once
 	 * a match request has been accepted, not by the browser.
 	 *
-	 * TODO: restrict this once authentication exists - right now anyone who can
-	 * reach the service can call it.
+	 * A student can read their own number; administrators can assist with account
+	 * management. Connection-service integration can add accepted-match access.
 	 */
 	@GetMapping("/{userId}/contact")
-	public StudentContactDto findContactDetails(@PathVariable String userId) {
+	public StudentContactDto findContactDetails(@PathVariable String userId, @AuthenticationPrincipal Jwt jwt) {
+		if (!isAdmin(jwt) && !userId.equals(jwt.getClaimAsString("uid"))) {
+			throw new AccessDeniedException("You can only view your own contact details");
+		}
 		return studentService.findContactDetails(userId);
 	}
 
@@ -63,7 +69,14 @@ public class StudentController {
 
 	@PutMapping("/{userId}")
 	public StudentDto update(@PathVariable String userId,
-							 @Valid @RequestBody StudentRequest request) {
+							 @Valid @RequestBody StudentRequest request, @AuthenticationPrincipal Jwt jwt) {
+		if (!isAdmin(jwt) && !userId.equals(jwt.getClaimAsString("uid"))) {
+			throw new AccessDeniedException("You can only update your own profile");
+		}
 		return studentService.update(userId, request);
+	}
+
+	private boolean isAdmin(Jwt jwt) {
+		return jwt.getClaimAsStringList("roles").contains("ROLE_ADMIN");
 	}
 }

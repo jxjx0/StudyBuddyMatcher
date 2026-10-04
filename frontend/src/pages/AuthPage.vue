@@ -2,8 +2,11 @@
 <script setup>
 import { ChevronRight, GraduationCap, Sparkles } from 'lucide-vue-next'
 import { useAppState } from '../composables/useAppState'
+import { ref } from 'vue'
 
-const { authMode, loginRole, profile, smuSchools, signIn, signUp } = useAppState()
+const { authError, loginRole, signIn } = useAppState()
+const email = ref('')
+const password = ref('')
 </script>
 
 <template>
@@ -12,25 +15,17 @@ const { authMode, loginRole, profile, smuSchools, signIn, signUp } = useAppState
   <div class="auth-card">
     <div class="auth-icon"><GraduationCap :size="22"/></div>
     <p class="eyebrow">WELCOME BACK</p>
-    <h1>{{ authMode==='login'?'Find your study people.':'Create your student account.' }}</h1>
-    <div v-if="authMode==='login'" class="role-toggle">
+    <h1>Find your study people.</h1>
+    <div class="role-toggle">
       <button :class="{selected:loginRole==='student'}" @click="loginRole='student'">Student</button>
       <button :class="{selected:loginRole==='admin'}" @click="loginRole='admin'">Admin</button>
     </div>
     <div class="auth-form">
-      <div v-if="authMode==='signup'" class="form-grid">
-        <label class="field"><span>Full name</span><input v-model="profile.name"/></label>
-        <label class="field"><span>Email</span><input type="email"/></label>
-        <label class="field"><span>School</span><select v-model="profile.school"><option v-for="school in smuSchools" :key="school">{{school}}</option></select></label>
-        <label class="field"><span>Programme</span><input v-model="profile.programme"/></label>
-        <label class="field"><span>Year of study</span><input v-model="profile.year"/></label>
-        <label class="field"><span>Contact number</span><input v-model="profile.phone"/></label>
-      </div>
-      <label class="field"><span>Email</span><input type="email" placeholder="you@smu.edu.sg"/></label>
-      <label class="field"><span>Password</span><input type="password"/></label>
-      <button class="primary-button auth-submit" @click="authMode==='login'?signIn():signUp()">{{authMode==='login'?'Log in':'Create account'}} <ChevronRight :size="16"/></button>
+      <label class="field"><span>Email</span><input v-model="email" type="email" autocomplete="username" placeholder="student@smu.edu.sg" required/></label>
+      <label class="field"><span>Password</span><input v-model="password" type="password" autocomplete="current-password" required/></label>
+      <p v-if="authError" class="auth-error" role="alert">{{authError}}</p>
+      <button class="primary-button auth-submit" @click="signIn(email,password)">Log in <ChevronRight :size="16"/></button>
     </div>
-    <button class="auth-switch" @click="authMode=authMode==='login'?'signup':'login'">{{authMode==='login'?'New to StudyBuds? Create a student account':'Already have an account? Log in'}}</button>
   </div>
 </div>
 </template>

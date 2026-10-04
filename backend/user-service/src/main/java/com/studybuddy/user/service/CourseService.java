@@ -16,18 +16,16 @@ public class CourseService {
 	}
 
 	public List<CourseDto> findAll() {
-		// TODO: implement
-		return List.of();
+		return courseRepository.findAll().stream().map(course -> new CourseDto(course.getCourseCode(), course.getCourseName())).toList();
 	}
 
 	public CourseDto findByCode(String courseCode) {
-		// TODO: implement - decide how a missing record is reported (the team has
-		// not yet agreed an exception + @RestControllerAdvice approach)
-		return null;
+		var course = courseRepository.findByCode(courseCode).orElseThrow(() -> new AccountNotFoundException("Course not found"));
+		return new CourseDto(course.getCourseCode(), course.getCourseName());
 	}
 
 	public CourseDto create(CourseDto course) {
-		// TODO: implement
-		return null;
+		var saved = courseRepository.save(new com.studybuddy.user.model.Course(course.getCourseCode(), course.getCourseName()));
+		return new CourseDto(saved.getCourseCode(), saved.getCourseName());
 	}
 }

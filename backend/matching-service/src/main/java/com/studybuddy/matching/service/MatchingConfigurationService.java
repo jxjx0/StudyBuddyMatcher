@@ -2,9 +2,14 @@ package com.studybuddy.matching.service;
 
 import com.studybuddy.matching.model.MatchingConfig;
 import com.studybuddy.matching.model.MatchingCriterion;
+import com.studybuddy.matching.model.CriterionType;
 import com.studybuddy.matching.engine.MatchingStrategy;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -18,18 +23,35 @@ import java.util.stream.Collectors;
  * here needs editing.
  */
 @Service
-public class MatchingConfigurationService {
+public class MatchingConfigurationService implements CommandLineRunner {
 
 	private final Map<String, MatchingStrategy> strategiesByName;
+	private final JdbcTemplate jdbc;
 	private final MatchingConfig currentConfig = new MatchingConfig();
 
-	public MatchingConfigurationService(List<MatchingStrategy> strategies) {
+	public MatchingConfigurationService(List<MatchingStrategy> strategies, JdbcTemplate jdbc) {
 		this.strategiesByName = strategies.stream()
-				.collect(Collectors.toMap(MatchingStrategy::getName, strategy -> strategy));
+				.collect(Collectors.toMap(strategy -> strategy.getName().toUpperCase(), strategy -> strategy));
+		this.jdbc = jdbc;
+		this.currentConfig.setCriteria(List.of(
+				new MatchingCriterion(CriterionType.COURSE, 20, true),
+				new MatchingCriterion(CriterionType.AVAILABILITY, 20, true),
+				new MatchingCriterion(CriterionType.STUDY_MODE, 20, true),
+				new MatchingCriterion(CriterionType.STUDY_GOAL, 20, true),
+				new MatchingCriterion(CriterionType.GROUP_SIZE, 20, true)));
+	}
+
+	@Override
+	public void run(String... args) {
+		String strategyName = jdbc.queryForObject("SELECT strategy_name FROM matching_configuration WHERE config_id = 1", String.class);
+		currentConfig.setStrategy(strategyName == null ? null : requireStrategy(strategyName));
+		List<MatchingCriterion> savedCriteria = jdbc.query("SELECT criterion_type, weight, enabled FROM matching_criteria ORDER BY criterion_type",
+				(rs, row) -> new MatchingCriterion(CriterionType.valueOf(rs.getString("criterion_type")),
+						rs.getDouble("weight"), rs.getBoolean("enabled")));
+		if (!savedCriteria.isEmpty()) currentConfig.setCriteria(savedCriteria);
 	}
 
 	public MatchingConfig getCurrentConfig() {
-		// TODO: implement - return the active configuration
 		return currentConfig;
 	}
 
@@ -42,10 +64,37 @@ public class MatchingConfigurationService {
 	}
 
 	public void setStrategy(String strategyName) {
-		// TODO: implement - look the strategy up by name and reject unknown names
+		String normalized = strategyName == null ? "" : strategyName.trim().toUpperCase();
+		MatchingStrategy selected = normalized.isEmpty() ? null : requireStrategy(normalized);
+		jdbc.update("UPDATE matching_configuration SET strategy_name = ? WHERE config_id = 1",
+				selected == null ? null : selected.getName());
+		currentConfig.setStrategy(selected);
 	}
 
+	@Transactional
 	public void updateCriteria(List<MatchingCriterion> criteria) {
-		// TODO: implement
+		if (criteria == null || criteria.isEmpty()) throw new IllegalArgumentException("At least one criterion is required");
+		EnumSet<CriterionType> seen = EnumSet.noneOf(CriterionType.class);
+		double enabledWeight = 0;
+		for (MatchingCriterion criterion : criteria) {
+			if (criterion == null || criterion.getType() == null) throw new IllegalArgumentException("Each criterion needs a type");
+			if (!seen.add(criterion.getType())) throw new IllegalArgumentException("Duplicate criterion: " + criterion.getType());
+			if (!Double.isFinite(criterion.getWeight()) || criterion.getWeight() < 0 || criterion.getWeight() > 100)
+				throw new IllegalArgumentException("Criterion weights must be between 0 and 100");
+			if (criterion.isEnabled()) enabledWeight += criterion.getWeight();
+		}
+		if (criteria.stream().noneMatch(MatchingCriterion::isEnabled) || Math.abs(enabledWeight - 100) > 0.01)
+			throw new IllegalArgumentException("Enabled criterion weights must total 100");
+		jdbc.update("DELETE FROM matching_criteria");
+		for (MatchingCriterion criterion : criteria) jdbc.update(
+				"INSERT INTO matching_criteria(criterion_type, weight, enabled) VALUES (?, ?, ?)",
+				criterion.getType().name(), criterion.getWeight(), criterion.isEnabled());
+		currentConfig.setCriteria(List.copyOf(criteria));
+	}
+
+	private MatchingStrategy requireStrategy(String name) {
+		MatchingStrategy strategy = strategiesByName.get(name.toUpperCase());
+		if (strategy == null) throw new IllegalArgumentException("Unknown matching strategy: " + name);
+		return strategy;
 	}
 }

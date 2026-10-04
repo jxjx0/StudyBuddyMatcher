@@ -3,7 +3,7 @@
 import { CalendarDays, Check, ChevronRight, Plus, X } from 'lucide-vue-next'
 import { useAppState } from '../../composables/useAppState'
 
-const { profile, smuSchools, draftCourse, courses, addCourse, removeCourse, showAvailability, go, toast, selectedProfile, addAvailability } = useAppState()
+const { profile, smuSchools, draftCourse, courses, addCourse, removeCourse, showAvailability, go, toast, saveProfile, selectedProfile, addAvailability } = useAppState()
 </script>
 
 <template>
@@ -77,7 +77,7 @@ const { profile, smuSchools, draftCourse, courses, addCourse, removeCourse, show
                 <div class="check-list goal-list"><label
                         v-for="goal in ['Concept review', 'Problem solving', 'Exam preparation', 'Project discussion']"
                         :key="goal"><input type="checkbox" :value="goal" v-model="profile.goals" /> {{ goal }}</label>
-                </div><button class="primary-button save-button" @click="toast()">Save profile
+                </div><button class="primary-button save-button" @click="saveProfile">Save profile
                     <Check :size="15" />
                 </button>
             </div>

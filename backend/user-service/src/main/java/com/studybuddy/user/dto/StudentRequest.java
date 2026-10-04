@@ -4,8 +4,11 @@ import com.studybuddy.user.model.MeetingMode;
 import com.studybuddy.user.model.StudyGoal;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
+import com.studybuddy.user.model.TimeSlot;
 
 /**
  * Payload for creating or updating a student profile.
@@ -14,6 +17,10 @@ public class StudentRequest {
 
 	@NotBlank(message = "name is required")
 	private String name;
+	@Email
+	private String email;
+	@Size(min = 8, message = "password must contain at least 8 characters")
+	private String password;
 
 	@NotBlank(message = "school is required")
 	private String school;
@@ -29,10 +36,16 @@ public class StudentRequest {
 	private List<StudyGoal> studyGoals;
 	private List<String> currentCourseCodes;
 	private List<String> coursesForStudyingCodes;
+	private List<TimeSlot> weeklyAvailability;
 
 	public String getName() {
 		return name;
 	}
+
+	public String getEmail() { return email; }
+	public void setEmail(String email) { this.email = email; }
+	public String getPassword() { return password; }
+	public void setPassword(String password) { this.password = password; }
 
 	public void setName(String name) {
 		this.name = name;
@@ -109,4 +122,7 @@ public class StudentRequest {
 	public void setCoursesForStudyingCodes(List<String> coursesForStudyingCodes) {
 		this.coursesForStudyingCodes = coursesForStudyingCodes;
 	}
+
+	public List<TimeSlot> getWeeklyAvailability() { return weeklyAvailability; }
+	public void setWeeklyAvailability(List<TimeSlot> weeklyAvailability) { this.weeklyAvailability = weeklyAvailability; }
 }
