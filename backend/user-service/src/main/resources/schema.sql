@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS user_accounts (
-    user_id VARCHAR(36) PRIMARY KEY,
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(320) NOT NULL UNIQUE,
     password_hash VARCHAR(100) NOT NULL,
     user_role VARCHAR(16) NOT NULL CHECK (user_role IN ('STUDENT', 'ADMIN')),
@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS user_accounts (
 );
 
 CREATE TABLE IF NOT EXISTS courses (
-    course_code VARCHAR(32) PRIMARY KEY,
+    course_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    course_code VARCHAR(32) NOT NULL,
     course_name VARCHAR(200) NOT NULL
 );
