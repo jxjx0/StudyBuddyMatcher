@@ -75,7 +75,8 @@ public class UserRepository {
 	}
 
 	public Optional<User> findById(String userId) {
-		return queryOne("SELECT * FROM user_accounts WHERE user_id = ?", userId);
+		if (!isUuid(userId)) return Optional.empty();
+		return queryOne("SELECT * FROM user_accounts WHERE user_id = CAST(? AS uuid)", userId);
 	}
 
 	public Optional<User> findByEmail(String email) {
@@ -110,7 +111,7 @@ public class UserRepository {
 		try {
 			jdbc.update("""
 					INSERT INTO user_accounts(user_id, email, password_hash, user_role, account_status, profile_data)
-					VALUES (?, ?, ?, ?, ?, CAST(? AS jsonb))
+					VALUES (CAST(? AS uuid), ?, ?, ?, ?, CAST(? AS jsonb))
 					ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email,
 					 password_hash = EXCLUDED.password_hash, user_role = EXCLUDED.user_role,
 					 account_status = EXCLUDED.account_status, profile_data = EXCLUDED.profile_data
@@ -123,7 +124,8 @@ public class UserRepository {
 	}
 
 	public boolean deleteById(String userId) {
-		return jdbc.update("DELETE FROM user_accounts WHERE user_id = ?", userId) > 0;
+		if (!isUuid(userId)) return false;
+		return jdbc.update("DELETE FROM user_accounts WHERE user_id = CAST(? AS uuid)", userId) > 0;
 	}
 
 	public long countByRole(String role) {
@@ -133,6 +135,13 @@ public class UserRepository {
 	public long countByRoleAndStatus(String role, String status) {
 		return jdbc.queryForObject("SELECT count(*) FROM user_accounts WHERE user_role = ? AND account_status = ?",
 				Long.class, role, status);
+	}
+
+	// user_id is a PostgreSQL uuid; an id that is not a valid UUID cannot match any account.
+	private static boolean isUuid(String value) {
+		if (value == null) return false;
+		try { UUID.fromString(value); return true; }
+		catch (IllegalArgumentException e) { return false; }
 	}
 
 	private Optional<User> queryOne(String sql, String value) {

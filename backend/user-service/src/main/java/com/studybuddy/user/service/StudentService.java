@@ -61,8 +61,8 @@ public class StudentService {
 		dto.setAccountStatus(student.getAccountStatus()); dto.setMeetingMode(student.getMeetingMode());
 		dto.setGroupSizePreference(student.getGroupSizePreference()); dto.setStudyGoals(List.copyOf(student.getStudyGoals()));
 		dto.setWeeklyAvailability(List.copyOf(student.getWeeklyAvailability()));
-		dto.setCurrentCourses(student.getCurrentCourses().stream().map(c -> new CourseDto(c.getCourseCode(), c.getCourseName())).toList());
-		dto.setCoursesForStudying(student.getCoursesForStudying().stream().map(c -> new CourseDto(c.getCourseCode(), c.getCourseName())).toList());
+		dto.setCurrentCourses(student.getCurrentCourses().stream().map(c -> new CourseDto(c.getCourseId(), c.getCourseCode(), c.getCourseName())).toList());
+		dto.setCoursesForStudying(student.getCoursesForStudying().stream().map(c -> new CourseDto(c.getCourseId(), c.getCourseCode(), c.getCourseName())).toList());
 		return dto;
 	}
 }

@@ -5,6 +5,7 @@ package com.studybuddy.group.dto;
  */
 public class CourseDto {
 
+	private java.util.UUID courseId;
 	private String courseCode;
 	private String courseName;
 
@@ -14,6 +15,20 @@ public class CourseDto {
 	public CourseDto(String courseCode, String courseName) {
 		this.courseCode = courseCode;
 		this.courseName = courseName;
+	}
+
+	public CourseDto(java.util.UUID courseId, String courseCode, String courseName) {
+		this.courseId = courseId;
+		this.courseCode = courseCode;
+		this.courseName = courseName;
+	}
+
+	public java.util.UUID getCourseId() {
+		return courseId;
+	}
+
+	public void setCourseId(java.util.UUID courseId) {
+		this.courseId = courseId;
 	}
 
 	public String getCourseCode() {
