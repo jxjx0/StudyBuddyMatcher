@@ -17,6 +17,10 @@ npm install
 
 > The project also has a `pnpm-lock.yaml`, so `pnpm install` works too if you have pnpm set up. `npm install` is the simplest option if you don't.
 
+## Backend and Supabase
+
+Backend startup, Supabase PostgreSQL configuration, JWT secrets, and demo account/course seeding are documented in [backend/README.md](backend/README.md).
+
 ### Run the dev server
 
 ```bash

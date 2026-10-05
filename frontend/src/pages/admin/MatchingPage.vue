@@ -3,7 +3,7 @@
 import { Check } from 'lucide-vue-next'
 import { useAppState } from '../../composables/useAppState'
 
-const { matchingStrategy, changeStrategy, strategyHint, totalWeight, matchingCriteria, matchingWeights, setWeight, toast } = useAppState()
+const { matchingStrategy, changeStrategy, strategyHint, totalWeight, matchingCriteria, matchingWeights, setWeight, saveMatchingConfiguration, matchingConfigError } = useAppState()
 </script>
 
 <template>
@@ -13,6 +13,7 @@ const { matchingStrategy, changeStrategy, strategyHint, totalWeight, matchingCri
             <h1>Configure matching criteria.</h1>
             <p>Choose an optional strategy, then tune the relative importance of every criterion.</p>
         </section>
+        <p v-if="matchingConfigError" class="no-results-message">{{ matchingConfigError }}</p>
         <div class="form-card matching-config"><label class="field"><span>Matching strategy</span><select
                     :value="matchingStrategy" @change="changeStrategy($event.target.value)">
                     <option value="">No strategy</option>
@@ -35,7 +36,7 @@ const { matchingStrategy, changeStrategy, strategyHint, totalWeight, matchingCri
             </div>
             <div class="weight-total" :class="{ valid: totalWeight === 100 }">
                 <Check :size="16" /> {{ totalWeight === 100 ? 'Weights total 100%' : 'Weights rebalance automatically to 100%'}}
-            </div><button class="primary-button" @click="toast('Matching configuration saved')">Save
+            </div><button class="primary-button" :disabled="totalWeight !== 100" @click="saveMatchingConfiguration">Save
                 configuration</button>
         </div>
     </section>

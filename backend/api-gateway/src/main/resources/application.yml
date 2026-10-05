@@ -2,6 +2,8 @@ server:
   port: ${GATEWAY_PORT:8080}
 
 spring:
+  config:
+    import: "optional:file:./.env[.properties],optional:file:../.env[.properties],optional:file:./backend/.env[.properties],optional:file:../backend/.env[.properties]"
   application:
     name: api-gateway
   cloud:
@@ -12,7 +14,7 @@ spring:
             - id: user-service
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:
-                - Path=/api/users/**,/api/students/**,/api/courses/**,/api/admin/**
+                - Path=/api/users/**,/api/students/**,/api/courses/**,/api/admin/**,/api/auth/**
             - id: matching-service
               uri: ${MATCHING_SERVICE_URL:http://localhost:8083}
               predicates:
@@ -25,6 +27,10 @@ spring:
               uri: ${GROUP_SERVICE_URL:http://localhost:8085}
               predicates:
                 - Path=/api/groups/**
+
+app:
+  auth:
+    jwt-secret: ${JWT_SECRET:}
 
 management:
   endpoints:

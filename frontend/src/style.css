@@ -1629,3 +1629,9 @@ body {
         flex-direction: column
     }
 }
+
+.auth-error {
+    color: #b42318;
+    font-size: 13px;
+    margin: 0;
+}

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { GraduationCap, ShieldCheck, Sparkles, Users } from 'lucide-vue-next'
 import router from '../router'
-import { authenticated, authMode, loginRole, userRole } from './useAuth'
+import { authenticated, authError, loginRole, userRole, user, token, saveSession, clearSession } from './useAuth'
 
 const query = ref('')
 const groupQuery = ref('')
@@ -15,8 +15,8 @@ const selectedGroup = ref(null)
 const showAvailability = ref(false)
 const toastMessage = ref('')
 
-const courses = ['CS101 Introduction to Computing', 'CS204 Data Structures', 'CS301 Algorithms', 'MATH210 Discrete Mathematics', 'IS212 Database Systems', 'COMM101 Communication Skills']
-const smuSchools = ['School of Computing and Information Systems', 'Lee Kong Chian School of Business', 'School of Social Sciences', 'School of Economics', 'Yong Pung How School of Law']
+const courses = ref([])
+const smuSchools = ['School of Computing and Information Systems', 'School of Social Sciences', 'School of Business', 'School of Accountancy', 'School of Economics', 'School of Law']
 
 const profile = ref({ name: 'Alex Smith', school: smuSchools[0], programme: 'Computer Science', year: 'Year 2', phone: '+65 8123 4567', currentCourses: ['CS204 Data Structures', 'MATH210 Discrete Mathematics'], buddyCourses: ['CS204 Data Structures'], studyMode: 'Either', groupPreference: 'Small group', goals: ['Exam preparation'], availability: [{ day: 'Mon', time: '12:00 PM – 2:00 PM' }, { day: 'Wed', time: '12:00 PM – 2:00 PM' }] })
 const draftCourse = ref(courses[0])
@@ -25,7 +25,10 @@ const groupFilters = ref({ goal: '', mode: 'All study modes', availability: 'Any
 
 const matchingStrategy = ref('')
 const matchingWeights = ref({ course: 30, availability: 20, mode: 20, goal: 20, groupSize: 10 })
+const matchingConfigError = ref('')
 const matchingCriteria = [{ key: 'course', label: 'Course match' }, { key: 'availability', label: 'Availability' }, { key: 'mode', label: 'Study mode' }, { key: 'goal', label: 'Study goal' }, { key: 'groupSize', label: 'Preferred group size' }]
+const criterionTypes = { course: 'COURSE', availability: 'AVAILABILITY', mode: 'STUDY_MODE', goal: 'STUDY_GOAL', groupSize: 'GROUP_SIZE' }
+const criterionKeys = Object.fromEntries(Object.entries(criterionTypes).map(([key, type]) => [type, key]))
 const totalWeight = computed(() => Object.values(matchingWeights.value).reduce((sum, value) => sum + Number(value || 0), 0))
 const strategyHint = computed(() => matchingStrategy.value === 'course' ? 'Course match is locked as the highest priority.' : matchingStrategy.value === 'availability' ? 'Availability is locked as the highest priority.' : matchingStrategy.value === 'balanced' ? 'Balanced matching keeps all criteria active without locking one priority.' : 'No strategy rules are applied; adjust criteria freely.')
 
@@ -57,12 +60,11 @@ function setWeight(key, value) {
   if (adjustKey) matchingWeights.value[adjustKey] = Math.max(0, Number(matchingWeights.value[adjustKey]) + difference)
 }
 
-const students = [{ name: 'Maya Chen', initials: 'MC', color: 'coral', programme: 'Computer Science · Year 2', course: 'CS204 Data Structures', availability: 'Tue & Thu · Evenings', goal: 'Exam preparation', mode: 'Online or in-person', phone: '+65 9000 1111', score: 96 }, { name: 'Jordan Williams', initials: 'JW', color: 'blue', programme: 'Information Systems · Year 2', course: 'CS204 Data Structures', availability: 'Mon & Wed · Evenings', goal: 'Problem solving', mode: 'In-person', phone: '+65 9000 2222', score: 89 }, { name: 'Amara Okafor', initials: 'AO', color: 'yellow', programme: 'Computer Science · Year 3', course: 'MATH210 Discrete Mathematics', availability: 'Weekends · Flexible', goal: 'Concept review', mode: 'Online', phone: '+65 9000 3333', score: 84 }]
+const students = ref([])
 const groups = [{ name: 'Data Structures Deep Dive', course: 'CS204 Data Structures', meta: '4 / 6 members', time: 'Tue & Thu · 6:00 PM', goal: 'Exam preparation', mode: 'Online', availability: 'Tue & Thu', size: 6, description: 'Weekly sessions for concepts, practice problems, and exam preparation.', score: 94 }, { name: 'Algorithms & Coffee', course: 'CS301 Algorithms', meta: '3 / 5 members', time: 'Sat · 10:00 AM', goal: 'Problem solving', mode: 'In-person', availability: 'Weekends', size: 5, description: 'A friendly weekend crew for whiteboard practice and accountability.', score: 88 }]
-const incoming = [{ name: 'Priya Nair', detail: 'CS204 Data Structures · Exam preparation', color: 'purple', score: 93 }, { name: 'Daniel Kim', detail: 'CS204 Data Structures · Concept review', color: 'blue', score: 86 }]
-const outgoing = [{ name: 'Sofia Tan', detail: 'CS301 Algorithms · Problem solving', color: 'yellow', score: 81 }, { name: 'Ethan Lim', detail: 'MATH210 Discrete Mathematics · Exam preparation', color: 'coral', score: 78 }]
-
-const accounts = ref([{ id: 1, name: 'Alex Smith', email: 'alex@smu.edu.sg', role: 'Student', status: 'Active', lastActive: 'Today', usage: '12 matches · 4 connections · 2 groups', school: smuSchools[0] }, { id: 2, name: 'Maya Chen', email: 'maya@smu.edu.sg', role: 'Student', status: 'Active', lastActive: 'Yesterday', usage: '8 matches · 2 connections · 1 group', school: smuSchools[0] }, { id: 3, name: 'System Admin', email: 'admin@studybuds.sg', role: 'Admin', status: 'Active', lastActive: 'Today', usage: 'Administrative access', school: '—' }])
+const accounts = ref([])
+const dataError = ref('')
+const usageSummary = ref({ totalAccounts: 0, students: 0, activeStudents: 0, administrators: 0 })
 const accountSearch = ref('')
 const accountRole = ref('All roles')
 const showAccountForm = ref(false)
@@ -70,8 +72,19 @@ const editingAccount = ref(null)
 const accountDraft = ref({ name: '', email: '', role: 'Student', status: 'Active', school: smuSchools[0] })
 const visibleAccounts = computed(() => accounts.value.filter(account => (accountRole.value === 'All roles' || account.role === accountRole.value) && (!accountSearch.value || `${account.name} ${account.email}`.toLowerCase().includes(accountSearch.value.toLowerCase()))))
 function openAccountForm(account = null) { editingAccount.value = account; accountDraft.value = account ? { ...account } : { name: '', email: '', role: 'Student', status: 'Active', school: smuSchools[0] }; showAccountForm.value = true }
-function saveAccount() { if (!accountDraft.value.name || !accountDraft.value.email) return toast('Add a name and email'); if (editingAccount.value) { Object.assign(editingAccount.value, accountDraft.value); toast('Account updated') } else { accounts.value.push({ id: Date.now(), ...accountDraft.value, lastActive: 'Never', usage: accountDraft.value.role === 'Student' ? '0 matches · 0 connections · 0 groups' : 'Administrative access' }); toast('Account created') } showAccountForm.value = false }
-function deleteAccount(account) { if (account.email === 'admin@studybuds.sg') return toast('The pre-existing admin account cannot be deleted'); accounts.value = accounts.value.filter(item => item.id !== account.id); toast('Account deleted') }
+function api(path, options = {}) { return fetch(path, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}), ...options.headers } }).then(async response => { if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || `Request failed (${response.status})`) } return response.status === 204 ? null : response.json() }) }
+const displayCourse = course => `${course.courseCode} ${course.courseName}`
+function mapStudent(student) { const course = student.coursesForStudying?.[0] || student.currentCourses?.[0]; return { id: student.userId, name: student.name || 'Student', initials: (student.name || 'Student').split(' ').map(part => part[0]).join('').slice(0, 2), color: 'coral', school: student.school, programme: `${student.programme || student.school} · Year ${student.yearOfStudy}`, course: course ? displayCourse(course) : '', availability: (student.weeklyAvailability || []).map(slot => `${slot.day} ${slot.startTime}–${slot.endTime}`).join(', ') || 'Flexible', goal: (student.studyGoals || []).map(goal => goal.toLowerCase().replaceAll('_', ' ')).join(', ') || 'Study together', mode: student.meetingMode || 'EITHER', score: 80 } }
+async function loadCourses() { courses.value = (await api('/api/courses')).map(displayCourse); if (!courses.value.includes(draftCourse.value)) draftCourse.value = courses.value[0] || '' }
+async function loadStudents() { students.value = (await api('/api/students')).filter(student => student.userId !== user.value?.userId).map(mapStudent) }
+async function loadAccounts() { accounts.value = (await api('/api/admin/accounts')).map(account => ({ id: account.userId, name: account.name, email: account.email, role: account.role === 'ADMIN' ? 'Admin' : 'Student', status: account.accountStatus === 'ACTIVE' ? 'Active' : 'Suspended', school: account.school || '—', currentCourseCount: account.currentCourseCount, studyGoalCount: account.studyGoalCount, availabilitySlotCount: account.availabilitySlotCount })) }
+async function loadUsageSummary() { usageSummary.value = await api('/api/admin/usage') }
+async function loadOwnProfile() { if (!user.value?.userId || userRole.value !== 'student') return; const saved = await api(`/api/students/${user.value.userId}`); Object.assign(profile.value, { name: saved.name, school: saved.school, programme: saved.programme || '', year: `Year ${saved.yearOfStudy}`, phone: '', currentCourses: (saved.currentCourses || []).map(displayCourse), buddyCourses: (saved.coursesForStudying || []).map(displayCourse), studyMode: saved.meetingMode || 'EITHER', groupPreference: saved.groupSizePreference <= 2 ? 'One-to-one' : 'Small group', goals: (saved.studyGoals || []).map(goal => goal.toLowerCase().replaceAll('_', ' ').replace(/^./, c => c.toUpperCase())), availability: (saved.weeklyAvailability || []).map(slot => ({ day: slot.day, time: `${slot.startTime?.slice(0, 5)} – ${slot.endTime?.slice(0, 5)}` })) }) }
+async function loadAppData() { dataError.value = ''; try { await loadCourses(); if (userRole.value === 'admin') { await Promise.all([loadAccounts(), loadUsageSummary()]); try { await loadMatchingConfiguration() } catch (error) { matchingConfigError.value = `Could not load saved matching configuration: ${error.message}` } } else if (userRole.value === 'student') { await Promise.all([loadStudents(), loadOwnProfile()]) } } catch (error) { dataError.value = error.message; console.error('Could not load StudyBuds data', error) } }
+if (token.value && user.value) loadAppData()
+async function saveProfile() { try { const code = label => label.split(' ')[0]; await api(`/api/students/${user.value.userId}`, { method: 'PUT', body: JSON.stringify({ name: profile.value.name, school: profile.value.school, programme: profile.value.programme, yearOfStudy: Number(String(profile.value.year).match(/\d+/)?.[0] || 1), meetingMode: String(profile.value.studyMode).toUpperCase().replaceAll(' ', '_'), groupSizePreference: profile.value.groupPreference === 'One-to-one' ? 2 : 5, studyGoals: profile.value.goals.map(goal => goal.toUpperCase().replaceAll(' ', '_')), currentCourseCodes: profile.value.currentCourses.map(code), coursesForStudyingCodes: profile.value.buddyCourses.map(code), weeklyAvailability: profile.value.availability.map(slot => ({ day: slot.day.toUpperCase(), startTime: '18:00:00', endTime: '20:00:00' })) }) }); toast('Profile saved') } catch (error) { toast(error.message) } }
+async function saveAccount() { if (!accountDraft.value.name || !accountDraft.value.email) return toast('Add a name and email'); try { if (editingAccount.value) { await api(`/api/admin/accounts/${editingAccount.value.id}`, { method: 'PUT', body: JSON.stringify({ name: accountDraft.value.name, email: accountDraft.value.email, school: accountDraft.value.school }) }); await api(`/api/admin/accounts/${editingAccount.value.id}/status?status=${accountDraft.value.status.toUpperCase()}`, { method: 'PUT' }) } else { if (!accountDraft.value.password || accountDraft.value.password.length < 8) return toast('Set a password with at least 8 characters'); await api('/api/admin/accounts', { method: 'POST', body: JSON.stringify({ name: accountDraft.value.name, email: accountDraft.value.email, password: accountDraft.value.password, role: accountDraft.value.role.toUpperCase(), school: accountDraft.value.school }) }) } await loadAccounts(); showAccountForm.value = false; toast(editingAccount.value ? 'Account updated' : 'Account created') } catch (error) { toast(error.message) } }
+async function deleteAccount(account) { try { await api(`/api/admin/accounts/${account.id}`, { method: 'DELETE' }); await loadAccounts(); toast('Account deleted') } catch (error) { toast(error.message) } }
 
 const nav = computed(() => userRole.value === 'admin'
   ? [{ label: 'Admin dashboard', path: 'admin/dashboard', icon: ShieldCheck }, { label: 'User accounts', path: 'admin/users', icon: Users }, { label: 'Matching configuration', path: 'admin/matching', icon: Sparkles }]
@@ -81,7 +94,7 @@ const filteredStudents = computed(() => {
   const course = filters.value.course.trim().toLowerCase()
   const goal = filters.value.goal.trim().toLowerCase()
   if (!course && !goal) return []
-  return students.filter(student => {
+  return students.value.filter(student => {
     const matchesCourse = course && student.course.toLowerCase().includes(course)
     const matchesGoal = goal && student.goal.toLowerCase() === goal
     const matchesName = !query.value || student.name.toLowerCase().includes(query.value.trim().toLowerCase())
@@ -102,9 +115,37 @@ function go(next) {
   if (next !== 'student/public-profile') selectedProfile.value = null
   selectedGroup.value = null
 }
-function signIn() { authenticated.value = true; userRole.value = loginRole.value; go(loginRole.value === 'admin' ? 'admin/dashboard' : 'student/discover') }
-function signUp() { authenticated.value = true; userRole.value = 'student'; go('student/profile'); toast('Account created') }
-function signOut() { authenticated.value = false; router.push('/login') }
+async function signIn(email, password) {
+  authError.value = ''
+  try {
+    const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
+    const session = await response.json()
+    if (!response.ok) throw new Error(session.message || 'Unable to log in. Check your email and password.')
+    if (session.user.role.toLowerCase() !== loginRole.value) throw new Error(`This account is registered as ${session.user.role.toLowerCase()}. Choose the matching login type.`)
+    saveSession(session)
+    await loadAppData()
+    go(userRole.value === 'admin' ? 'admin/dashboard' : 'student/discover')
+  } catch (error) { authError.value = error.message || 'Unable to connect to StudyBuds.' }
+}
+async function loadMatchingConfiguration() {
+  matchingConfigError.value = ''
+  const config = await api('/api/matching/config')
+  const strategyName = typeof config.strategy === 'string' ? config.strategy : config.strategy?.name
+  matchingStrategy.value = strategyName === 'COURSE_FIRST' ? 'course' : strategyName === 'AVAILABILITY_FIRST' ? 'availability' : strategyName === 'BALANCED' ? 'balanced' : ''
+  const weights = { ...matchingWeights.value }
+  for (const criterion of config.criteria || []) { const key = criterionKeys[criterion.type]; if (key) weights[key] = Number(criterion.weight) }
+  if (Object.values(weights).reduce((total, weight) => total + weight, 0) === 100) matchingWeights.value = weights
+}
+async function saveMatchingConfiguration() {
+  if (totalWeight.value !== 100) return toast('Matching weights must total 100%')
+  const strategyName = matchingStrategy.value === 'course' ? 'COURSE_FIRST' : matchingStrategy.value === 'availability' ? 'AVAILABILITY_FIRST' : matchingStrategy.value === 'balanced' ? 'BALANCED' : ''
+  try {
+    await api(`/api/matching/config/strategy?name=${encodeURIComponent(strategyName)}`, { method: 'PUT' })
+    await api('/api/matching/config/criteria', { method: 'PUT', body: JSON.stringify(matchingCriteria.map(({ key }) => ({ type: criterionTypes[key], weight: Number(matchingWeights.value[key]), enabled: true }))) })
+    toast('Matching configuration saved')
+  } catch (error) { toast(`Could not save matching configuration: ${error.message}`) }
+}
+function signOut() { clearSession(); router.push('/login') }
 function toast(message = 'Profile saved') { toastMessage.value = message; setTimeout(() => toastMessage.value = '', 2200) }
 
 function addCourse() { if (draftCourse.value && !profile.value.currentCourses.includes(draftCourse.value)) profile.value.currentCourses.push(draftCourse.value) }
@@ -134,15 +175,15 @@ function finishAvailability() {
 
 export function useAppState() {
   return {
-    authenticated, authMode, loginRole, userRole,
+    authenticated, authError, loginRole, userRole,
     query, groupQuery, connectionTab, requestTab, showBuddyFilters, showGroupFilters,
     selectedProfile, selectedGroup, showAvailability, toastMessage,
-    courses, smuSchools, profile, draftCourse, filters, groupFilters,
-    matchingStrategy, matchingWeights, matchingCriteria, totalWeight, strategyHint, changeStrategy, setWeight,
-    students, groups, incoming, outgoing,
+    courses, smuSchools, profile, draftCourse, filters, groupFilters, dataError, loadAppData, usageSummary,
+    matchingStrategy, matchingWeights, matchingCriteria, totalWeight, strategyHint, changeStrategy, setWeight, saveMatchingConfiguration, matchingConfigError,
+    students, groups,
     accounts, accountSearch, accountRole, showAccountForm, editingAccount, accountDraft, visibleAccounts, openAccountForm, saveAccount, deleteAccount,
     nav, filteredStudents, buddyResultMessage, filteredGroups,
-    go, signIn, signUp, signOut, toast,
+    go, signIn, signOut, toast, saveProfile,
     addCourse, removeCourse, addAvailability, updateAvailability, removeAvailability,
     availabilityTimes, draggingAvailability, beginAvailability, extendAvailability, finishAvailability,
   }

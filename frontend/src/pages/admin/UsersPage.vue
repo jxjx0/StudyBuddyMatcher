@@ -3,7 +3,7 @@
 import { Plus, Search, X } from 'lucide-vue-next'
 import { useAppState } from '../../composables/useAppState'
 
-const { accountSearch, accountRole, showAccountForm, editingAccount, accountDraft, smuSchools, openAccountForm, saveAccount, deleteAccount, visibleAccounts } = useAppState()
+const { accountSearch, accountRole, showAccountForm, editingAccount, accountDraft, smuSchools, openAccountForm, saveAccount, deleteAccount, visibleAccounts, dataError } = useAppState()
 </script>
 
 <template>
@@ -28,21 +28,22 @@ const { accountSearch, accountRole, showAccountForm, editingAccount, accountDraf
             <div class="card-heading">
                 <div>
                     <h2>{{ editingAccount ? 'Update account' : 'Create account' }}</h2>
-                    <p>Use an email address and assign the account role.</p>
+                    <p>Account changes are saved to the system database.</p>
                 </div><button class="icon-button" @click="showAccountForm = false">
                     <X :size="16" />
                 </button>
             </div>
             <div class="form-grid"><label class="field"><span>Full name</span><input
                         v-model="accountDraft.name" /></label><label class="field"><span>Email</span><input
-                        v-model="accountDraft.email" type="email" /></label><label
-                    class="field"><span>Role</span><select v-model="accountDraft.role">
+                        v-model="accountDraft.email" type="email" /></label><label v-if="!editingAccount" class="field"><span>Temporary password</span><input
+                        v-model="accountDraft.password" type="password" minlength="8" /></label><label
+                    class="field"><span>Role</span><select v-model="accountDraft.role" :disabled="Boolean(editingAccount)">
                         <option>Student</option>
                         <option>Admin</option>
                     </select></label><label v-if="accountDraft.role === 'Student'"
                     class="field"><span>School</span><select v-model="accountDraft.school">
                         <option v-for="school in smuSchools" :key="school">{{ school }}</option>
-                    </select></label><label class="field"><span>Status</span><select v-model="accountDraft.status">
+                    </select></label><label v-if="editingAccount" class="field"><span>Status</span><select v-model="accountDraft.status">
                         <option>Active</option>
                         <option>Suspended</option>
                     </select></label></div>
@@ -50,6 +51,8 @@ const { accountSearch, accountRole, showAccountForm, editingAccount, accountDraf
                     @click="showAccountForm = false">Cancel</button><button class="primary-button"
                     @click="saveAccount">{{ editingAccount ? 'Save changes' : 'Create account' }}</button></div>
         </div>
+        <p v-if="dataError" class="no-results-message">Could not load accounts from the database: {{ dataError }}</p>
+        <p v-else-if="!visibleAccounts.length" class="no-results-message">No accounts found.</p>
         <div class="account-list">
             <article v-for="account in visibleAccounts" :key="account.id" class="account-card">
                 <div class="avatar avatar-purple">{{account.name.split(' ').map(part => part[0]).join('').slice(0, 2)}}
@@ -62,9 +65,7 @@ const { accountSearch, accountRole, showAccountForm, editingAccount, accountDraf
                         </div><span class="role-pill">{{ account.role }}</span><span class="status-pill"
                             :class="account.status.toLowerCase()">{{ account.status }}</span>
                     </div>
-                    <div class="account-meta"><span>Last active: {{ account.lastActive }}</span><span
-                            v-if="account.role === 'Student'">Usage: {{ account.usage }}</span><span v-else>Usage details
-                            restricted to student accounts</span></div>
+                    <div class="account-meta"><span v-if="account.role === 'Student'">{{ account.school }} · {{ account.currentCourseCount }} courses · {{ account.studyGoalCount }} study goals · {{ account.availabilitySlotCount }} availability slots</span><span v-else>Administrator account</span></div>
                     <div class="account-actions"><button class="secondary-button"
                             @click="openAccountForm(account)">Edit</button><button class="danger-button"
                             @click="deleteAccount(account)">Delete</button></div>
