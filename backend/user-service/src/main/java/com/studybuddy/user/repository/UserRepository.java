@@ -25,19 +25,23 @@ import java.util.UUID;
 /** PostgreSQL storage for user accounts and student profile documents. */
 @Repository
 public class UserRepository {
+	// A record (Java 16+) is a short way to write a class that just holds data.
 	private record StudentProfile(String name, String school, String programme, int yearOfStudy,
 			String contactNumber, List<Course> currentCourses, List<Course> coursesForStudying,
 			MeetingMode meetingMode, List<TimeSlot> weeklyAvailability, int groupSizePreference,
 			List<StudyGoal> studyGoals) { }
 
-	private final JdbcTemplate jdbc;
-	private final ObjectMapper mapper;
-	private final RowMapper<User> userMapper;
+	private final JdbcTemplate jdbc; // A Spring class for running SQL against the database (PostgreSQL here).
+	// ObjectMapper: converts between Java and JSON; main class of Jackson library
+	private final ObjectMapper mapper; // turns one database row into one Java object
+	private final RowMapper<User> userMapper; 
 
 	public UserRepository(JdbcTemplate jdbc, ObjectMapper mapper) {
 		this.jdbc = jdbc;
 		this.mapper = mapper;
 		this.userMapper = this::mapUser;
+		// :: means "use this method as the implementation." It's shorthand for a lambda:
+		// this.userMapper = (rs, row) -> this.mapUser(rs, row);
 	}
 
 	private User mapUser(ResultSet rs, int row) throws SQLException {
@@ -51,6 +55,7 @@ public class UserRepository {
 		if (profile != null && user instanceof Student student) {
 			StudentProfile saved;
 			try { saved = mapper.readValue(profile, StudentProfile.class); }
+			// JacksonException: JSON conversion failed
 			catch (JacksonException e) { throw new IllegalStateException("Could not read saved student profile", e); }
 			student.setName(saved.name());
 			student.setSchool(saved.school());

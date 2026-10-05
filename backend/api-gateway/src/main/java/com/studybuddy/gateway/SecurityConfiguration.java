@@ -37,6 +37,7 @@ public class SecurityConfiguration {
 	@Bean SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter converter) throws Exception {
 		return http.csrf(csrf -> csrf.disable()).sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/login", "/actuator/health").permitAll()
+					.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/register").permitAll()
 					.requestMatchers("/api/admin/**", "/api/matching/config/**").hasRole("ADMIN")
 					.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/courses/**").hasRole("ADMIN")
 					.requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/courses/**").hasRole("ADMIN")
