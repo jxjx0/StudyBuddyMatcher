@@ -28,7 +28,26 @@ public class Student extends User {
 	 */
 	public void updateProfile(String name, String school, String programme,
 							  int yearOfStudy, String contactNumber) {
-		// TODO: implement
+		requireText(name, "name", 100);
+		requireText(school, "school", 200);
+		requireText(programme, "programme", 200);
+		if (yearOfStudy < 1 || yearOfStudy > 5)
+			throw new IllegalArgumentException("yearOfStudy must be between 1 and 5");
+		if (contactNumber != null && contactNumber.length() > 32)
+			throw new IllegalArgumentException("contactNumber must be at most 32 characters");
+		this.name = name;
+		this.school = school;
+		this.programme = programme;
+		this.yearOfStudy = yearOfStudy;
+		this.contactNumber = contactNumber;
+	}
+
+	// Same limits as the students table and StudentRequest.
+	private static void requireText(String value, String field, int maxLength) {
+		if (value == null || value.isBlank())
+			throw new IllegalArgumentException(field + " is required");
+		if (value.length() > maxLength)
+			throw new IllegalArgumentException(field + " must be at most " + maxLength + " characters");
 	}
 
 	public String getName() {
@@ -79,24 +98,60 @@ public class Student extends User {
 		return currentCourses;
 	}
 
+	/** Rejects null and courses without a code; a course already in the list is not added again. */
 	public void addCourse(Course course) {
-		// TODO: implement
+		addIfAbsent(currentCourses, course);
 	}
 
+	/** Also drops the course from coursesForStudying, which may only hold current courses. */
 	public void removeCourse(Course course) {
-		// TODO: implement
+		removeMatching(currentCourses, course);
+		removeMatching(coursesForStudying, course);
 	}
 
 	public ArrayList<Course> getCoursesForStudying() {
 		return coursesForStudying;
 	}
 
+	/** Students can only look for study buddies in courses they are currently taking. */
 	public void addCourseForStudying(Course course) {
-		// TODO: implement
+		if (course != null && !takesCourse(course))
+			throw new IllegalArgumentException(course.getCourseCode() + " is not one of your current courses");
+		addIfAbsent(coursesForStudying, course);
+	}
+
+	/** Whether the course is one of the student's current courses. */
+	public boolean takesCourse(Course course) {
+		return currentCourses.stream().anyMatch(existing -> sameCourse(existing, course));
+	}
+
+	/** Whether a course with this code is one of the student's current courses (case is ignored). */
+	public boolean takesCourse(String courseCode) {
+		return courseCode != null
+				&& currentCourses.stream().anyMatch(existing -> courseCode.trim().equalsIgnoreCase(existing.getCourseCode()));
 	}
 
 	public void removeCourseForStudying(Course course) {
-		// TODO: implement
+		removeMatching(coursesForStudying, course);
+	}
+
+	// Course has no equals(), so courses are matched by their course code.
+	private static boolean sameCourse(Course a, Course b) {
+		return a.getCourseCode() != null && a.getCourseCode().equalsIgnoreCase(b.getCourseCode());
+	}
+
+	// addIfAbsent adds a course to a list only if the course is valid and not already in the list. Helper method.
+	private static void addIfAbsent(ArrayList<Course> courses, Course course) {
+		if (course == null || course.getCourseCode() == null || course.getCourseCode().isBlank())
+			throw new IllegalArgumentException("course with a course code is required");
+		if (courses.stream().noneMatch(existing -> sameCourse(existing, course)))
+			courses.add(course);
+	}
+
+	// helper method with removal of course
+	private static void removeMatching(ArrayList<Course> courses, Course course) {
+		if (course == null) return;
+		courses.removeIf(existing -> sameCourse(existing, course));
 	}
 
 	public MeetingMode getMeetingMode() {
@@ -107,6 +162,7 @@ public class Student extends User {
 		this.meetingMode = mode;
 	}
 
+	// Jessica part
 	public ArrayList<TimeSlot> getWeeklyAvailability() {
 		return weeklyAvailability;
 	}
@@ -118,7 +174,8 @@ public class Student extends User {
 	public void removeTimeSlot(TimeSlot slot) {
 		// TODO: implement
 	}
-
+	// end of Jessica part
+	
 	public int getGroupSizePreference() {
 		return groupSizePreference;
 	}
@@ -131,11 +188,15 @@ public class Student extends User {
 		return studyGoals;
 	}
 
+	/** Rejects null; a goal already in the list is not added again. */
 	public void addStudyGoal(StudyGoal goal) {
-		// TODO: implement
+		if (goal == null)
+			throw new IllegalArgumentException("study goal is required");
+		if (!studyGoals.contains(goal))
+			studyGoals.add(goal);
 	}
 
 	public void removeStudyGoal(StudyGoal goal) {
-		// TODO: implement
+		studyGoals.remove(goal);
 	}
 }

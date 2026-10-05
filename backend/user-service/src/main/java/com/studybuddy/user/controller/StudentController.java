@@ -62,20 +62,32 @@ public class StudentController {
 		return studentService.findContactDetails(userId);
 	}
 
+	// POST /api/students
 	@PostMapping
+	// ResponseEntity<T> wraps the whole HTTP response: the status code, the headers and the body.
+	// @RequestBody tells Spring to read the JSON body of the request and turn it into a Java object (StudentRequest).
+
+	// @Valid runs the validation rules defined on the fields of StudentRequest, like @NotBlank, @Email or @Size.
+	// If a check fails, Spring rejects the request with 400 Bad Request before your method even runs.
+
 	public ResponseEntity<StudentDto> create(@Valid @RequestBody StudentRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED).body(studentService.create(request));
 	}
 
 	@PutMapping("/{userId}")
+	// @AuthenticationPrincipal Jwt jwt gives you the logged-in user. Spring Security has already checked the
+	// JWT token from the Authorization: Bearer ... header, and this annotation passes the decoded token into your method
 	public StudentDto update(@PathVariable String userId,
 							 @Valid @RequestBody StudentRequest request, @AuthenticationPrincipal Jwt jwt) {
+		// jwt.getClaimAsString("uid") reads the uid value from the logged-in user's token,
+		// which is the ID of whoever sent the request.
 		if (!isAdmin(jwt) && !userId.equals(jwt.getClaimAsString("uid"))) {
 			throw new AccessDeniedException("You can only update your own profile");
 		}
 		return studentService.update(userId, request);
 	}
 
+	// A helper method to check whether user is an admin
 	private boolean isAdmin(Jwt jwt) {
 		return jwt.getClaimAsStringList("roles").contains("ROLE_ADMIN");
 	}
