@@ -3,7 +3,7 @@
 import { CalendarDays, Check, ChevronRight, Plus, X } from 'lucide-vue-next'
 import { useAppState } from '../../composables/useAppState'
 
-const { profile, smuSchools, draftCourse, courses, addCourse, removeCourse, showAvailability, go, toast, saveProfile, selectedProfile, addAvailability } = useAppState()
+const { profile, smuSchools, draftCourse, courses, addCourse, removeCourse, showAvailability, go, toast, saveProfile, addAvailability } = useAppState()
 </script>
 
 <template>
@@ -11,109 +11,74 @@ const { profile, smuSchools, draftCourse, courses, addCourse, removeCourse, show
         <section class="page-heading">
             <p class="eyebrow">YOUR PROFILE</p>
             <h1>Keep your study vibe fresh.</h1>
-            <p>Private fields are marked clearly; the preview shows what other students can see.</p>
+            <p>Private fields are marked clearly.</p>
         </section>
-        <div class="profile-layout">
-            <div class="form-card profile-form">
-                <div class="profile-form-top">
-                    <div class="avatar avatar-xl avatar-purple">AS</div>
-                    <div>
-                        <h2>{{ profile.name }}</h2>
-                        <p>{{ profile.programme }} · {{ profile.year }}</p>
-                    </div>
+        <div class="form-card profile-form">
+            <div class="profile-form-top">
+                <div class="avatar avatar-xl avatar-purple">AS</div>
+                <div>
+                    <h2>{{ profile.name }}</h2>
+                    <p>{{ profile.programme }} · {{ profile.year }}</p>
                 </div>
-                <div class="form-grid"><label class="field"><span>Name <small>Public</small></span><input
-                            v-model="profile.name" /></label><label class="field"><span>School
-                            <small>Public</small></span><select v-model="profile.school">
-                            <option v-for="school in smuSchools" :key="school">{{ school }}</option>
-                        </select></label><label class="field"><span>Programme <small>Public</small></span><input
-                            v-model="profile.programme" /></label><label class="field"><span>Year of study
-                            <small>Public</small></span><select v-model="profile.year">
-                            <option>Year 1</option>
-                            <option>Year 2</option>
-                            <option>Year 3</option>
-                            <option>Year 4</option>
-                        </select></label><label class="field"><span>Contact number <small>Private until
-                                accepted</small></span><input v-model="profile.phone" /></label></div>
-                <h3 class="form-section-title">Courses currently taken</h3>
-                <div class="add-row"><select v-model="draftCourse">
-                        <option v-for="course in courses" :key="course">{{ course }}</option>
-                    </select><button class="secondary-button" @click="addCourse">
-                        <Plus :size="15" /> Add course
-                    </button></div>
-                <div class="chip-list"><span v-for="course in profile.currentCourses" :key="course"
-                        class="course-chip">{{ course }} <button @click="removeCourse(course)">
-                            <X :size="13" />
-                        </button></span></div>
-                <h3 class="form-section-title">Study preferences</h3><label class="field"><span>Course needing a buddy
-                        <small>Public</small></span></label>
-                <div class="check-list"><label v-for="course in profile.currentCourses" :key="course"><input
-                            type="checkbox" :value="course" v-model="profile.buddyCourses" /> {{ course }}</label></div>
-                <div class="form-grid"><label class="field"><span>Preferred study mode
-                            <small>Public</small></span><select v-model="profile.studyMode">
-                            <option>In-person</option>
-                            <option>Online</option>
-                            <option>Either</option>
-                        </select></label><label class="field"><span>Group preference <small>Public</small></span><select
-                            v-model="profile.groupPreference">
-                            <option>One-to-one</option>
-                            <option>Small group</option>
-                            <option>Either</option>
-                        </select></label></div><button class="availability-button" @click="go('student/availability')">
-                    <CalendarDays :size="16" /> Select weekly availability
-                    <ChevronRight :class="{ rotate: showAvailability }" :size="15" />
-                </button>
-                <div class="availability-summary"><span v-for="slot in profile.availability"
-                        :key="slot.day + slot.time">{{ slot.day }} · {{ slot.time }}</span></div>
-                <div v-if="showAvailability" class="calendar-panel">
-                    <h3>Build your weekly availability</h3>
-                    <p>Select a day and time slot.</p>
-                    <div class="calendar-grid"><button
-                            v-for="day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']"
-                            :key="day" @click="addAvailability(day, '6:00 PM – 8:00 PM')">{{ day }}<small>6:00–8:00
-                                PM</small></button></div>
-                </div>
-                <h3 class="form-section-title">Study goals <small>Public</small></h3>
-                <div class="check-list goal-list"><label
-                        v-for="goal in ['Concept review', 'Problem solving', 'Exam preparation', 'Project discussion']"
-                        :key="goal"><input type="checkbox" :value="goal" v-model="profile.goals" /> {{ goal }}</label>
-                </div><button class="primary-button save-button" @click="saveProfile">Save profile
-                    <Check :size="15" />
-                </button>
             </div>
-            <aside class="public-card">
-                <p class="eyebrow">PUBLIC PROFILE PREVIEW</p>
-                <h2>{{ profile.name }}</h2>
-                <p>{{ profile.school }}</p>
-                <p>{{ profile.programme }} · {{ profile.year }}</p>
-                <div class="preview-line"><span>Contact number</span><strong>Hidden until connected</strong></div>
-                <div class="preview-line"><span>Courses needing a buddy</span><strong>{{ profile.buddyCourses.join(',')||'None selected'}}</strong></div>
-                <div class="preview-line"><span>Study mode</span><strong>{{ profile.studyMode }}</strong></div>
-                <div class="preview-line">
-                    <span>Availability</span><strong>{{profile.availability.map(slot => slot.day).join(', ')}}</strong>
-                </div>
-                <div class="preview-line"><span>Group preference</span><strong>{{ profile.groupPreference }}</strong>
-                </div>
-                <div class="preview-line"><span>Study goals</span><strong>{{ profile.goals.join(', ') }}</strong></div>
-                <button class="secondary-button" @click="selectedProfile = profile">View public profile</button>
-            </aside>
-        </div>
-        <div v-if="selectedProfile === profile" class="profile-preview full-profile"><button class="close-preview"
-                @click="selectedProfile = null">
-                <X :size="17" />
+            <div class="form-grid"><label class="field"><span>Name <small>Public</small></span><input
+                        v-model="profile.name" /></label><label class="field"><span>School
+                        <small>Public</small></span><select v-model="profile.school">
+                        <option v-for="school in smuSchools" :key="school">{{ school }}</option>
+                    </select></label><label class="field"><span>Programme <small>Public</small></span><input
+                        v-model="profile.programme" /></label><label class="field"><span>Year of study
+                        <small>Public</small></span><select v-model="profile.year">
+                        <option>Year 1</option>
+                        <option>Year 2</option>
+                        <option>Year 3</option>
+                        <option>Year 4</option>
+                    </select></label><label class="field"><span>Contact number <small>Private until
+                            accepted</small></span><input v-model="profile.phone" /></label></div>
+            <h3 class="form-section-title">Courses currently taken</h3>
+            <div class="add-row"><select v-model="draftCourse">
+                    <option v-for="course in courses" :key="course">{{ course }}</option>
+                </select><button class="secondary-button" @click="addCourse">
+                    <Plus :size="15" /> Add course
+                </button></div>
+            <div class="chip-list"><span v-for="course in profile.currentCourses" :key="course"
+                    class="course-chip">{{ course }} <button @click="removeCourse(course)">
+                        <X :size="13" />
+                    </button></span></div>
+            <h3 class="form-section-title">Study preferences</h3><label class="field"><span>Course needing a buddy
+                    <small>Public</small></span></label>
+            <div class="check-list"><label v-for="course in profile.currentCourses" :key="course"><input
+                        type="checkbox" :value="course" v-model="profile.buddyCourses" /> {{ course }}</label></div>
+            <div class="form-grid"><label class="field"><span>Preferred study mode
+                        <small>Public</small></span><select v-model="profile.studyMode">
+                        <option>In-person</option>
+                        <option>Online</option>
+                        <option>Either</option>
+                    </select></label><label class="field"><span>Group preference <small>Public</small></span><select
+                        v-model="profile.groupPreference">
+                        <option>One-to-one</option>
+                        <option>Small group</option>
+                        <option>Either</option>
+                    </select></label></div><button class="availability-button" @click="go('student/availability')">
+                <CalendarDays :size="16" /> Select weekly availability
+                <ChevronRight :class="{ rotate: showAvailability }" :size="15" />
             </button>
-            <p class="eyebrow">PUBLIC STUDY PROFILE</p>
-            <h2>{{ profile.name }}</h2>
-            <div class="profile-detail-grid">
-                <div><span>School</span><strong>{{ profile.school }}</strong></div>
-                <div><span>Programme</span><strong>{{ profile.programme }}</strong></div>
-                <div><span>Year of study</span><strong>{{ profile.year }}</strong></div>
-                <div><span>Contact number</span><strong>Hidden until connection accepted</strong></div>
-                <div><span>Courses needing a buddy</span><strong>{{ profile.buddyCourses.join(', ') }}</strong></div>
-                <div><span>Preferred study mode</span><strong>{{ profile.studyMode }}</strong></div>
-                <div><span>Weekly availability</span><strong>{{profile.availability.map(slot => slot.day + ' · '+slot.time).join('; ')}}</strong></div>
-                <div><span>Study goals</span><strong>{{ profile.goals.join(', ') }}</strong></div>
+            <div class="availability-summary"><span v-for="slot in profile.availability"
+                    :key="slot.day + slot.time">{{ slot.day }} · {{ slot.time }}</span></div>
+            <div v-if="showAvailability" class="calendar-panel">
+                <h3>Build your weekly availability</h3>
+                <p>Select a day and time slot.</p>
+                <div class="calendar-grid"><button
+                        v-for="day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']"
+                        :key="day" @click="addAvailability(day, '6:00 PM – 8:00 PM')">{{ day }}<small>6:00–8:00
+                            PM</small></button></div>
             </div>
+            <h3 class="form-section-title">Study goals <small>Public</small></h3>
+            <div class="check-list goal-list"><label
+                    v-for="goal in ['Concept review', 'Problem solving', 'Exam preparation', 'Project discussion']"
+                    :key="goal"><input type="checkbox" :value="goal" v-model="profile.goals" /> {{ goal }}</label>
+            </div><button class="primary-button save-button" @click="saveProfile">Save profile
+                <Check :size="15" />
+            </button>
         </div>
     </section>
 </template>

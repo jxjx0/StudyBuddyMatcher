@@ -2,6 +2,7 @@ package com.studybuddy.user.config;
 
 import com.studybuddy.user.model.AccountStatus;
 import com.studybuddy.user.model.Course;
+import com.studybuddy.user.model.GroupSizePreference;
 import com.studybuddy.user.model.MeetingMode;
 import com.studybuddy.user.model.StudyGoal;
 import com.studybuddy.user.model.Student;
@@ -70,7 +71,7 @@ public class DemoDataSeeder implements CommandLineRunner {
 				case 3 -> "Economics"; case 4 -> "Law"; default -> "Social Sciences";
 			});
 			student.setYearOfStudy(1 + i % 4); student.setContactNumber(String.format("+65 8000 %04d", i));
-			student.setMeetingMode(MeetingMode.values()[i % MeetingMode.values().length]); student.setGroupSizePreference(2 + i % 5);
+			student.setMeetingMode(MeetingMode.values()[i % MeetingMode.values().length]); student.setGroupSizePreference(GroupSizePreference.values()[i % GroupSizePreference.values().length]);
 			student.getStudyGoals().clear(); student.getCurrentCourses().clear(); student.getCoursesForStudying().clear(); student.getWeeklyAvailability().clear();
 			student.getStudyGoals().add(StudyGoal.values()[i % StudyGoal.values().length]);
 			student.getCurrentCourses().add(COURSES.get((i - 1) % COURSES.size()));

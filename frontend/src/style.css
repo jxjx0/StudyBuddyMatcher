@@ -578,7 +578,8 @@ body {
     color: #fff
 }
 
-.field small {
+.field small,
+.form-section-title small {
     font-size: 10px;
     color: #b2685d;
     font-weight: 500;

@@ -4,6 +4,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.studybuddy.user.model.AccountStatus;
 import com.studybuddy.user.model.Course;
+import com.studybuddy.user.model.GroupSizePreference;
 import com.studybuddy.user.model.MeetingMode;
 import com.studybuddy.user.model.Student;
 import com.studybuddy.user.model.StudyGoal;
@@ -30,6 +31,8 @@ import java.util.UUID;
  * user_accounts, so a student must be saved there first: students.user_id
  * references it.
  */
+
+// StudentRepository calls from students table
 @Repository
 public class StudentRepository {
 	private final JdbcTemplate jdbc;
@@ -75,8 +78,7 @@ public class StudentRepository {
 				student.getYearOfStudy(), student.getContactNumber(), courseIds(student.getCurrentCourses()),
 				courseIds(student.getCoursesForStudying()),
 				student.getMeetingMode() == null ? null : student.getMeetingMode().name(), availability,
-				// 0 means no preference; stored as NULL so the BETWEEN 2 AND 10 check allows it.
-				student.getGroupSizePreference() == 0 ? null : student.getGroupSizePreference(),
+				student.getGroupSizePreference() == null ? null : student.getGroupSizePreference().name(),
 				student.getStudyGoals().stream().map(StudyGoal::name).toArray(String[]::new), student.getUserId() };
 	}
 
@@ -114,7 +116,8 @@ public class StudentRepository {
 		student.setContactNumber(rs.getString("contact_number"));
 		String mode = rs.getString("meeting_mode");
 		student.setMeetingMode(mode == null ? null : MeetingMode.valueOf(mode));
-		student.setGroupSizePreference(rs.getInt("group_size_preference"));
+		String groupSize = rs.getString("group_size_preference");
+		student.setGroupSizePreference(groupSize == null ? null : GroupSizePreference.valueOf(groupSize));
 		student.getCurrentCourses().addAll(findCourses(rs.getArray("current_courses")));
 		student.getCoursesForStudying().addAll(findCourses(rs.getArray("courses_for_studying")));
 		for (String goal : strings(rs.getArray("study_goals")))

@@ -1,5 +1,6 @@
 package com.studybuddy.user.dto;
 
+import com.studybuddy.user.model.GroupSizePreference;
 import com.studybuddy.user.model.MeetingMode;
 import com.studybuddy.user.model.StudyGoal;
 // import jakarta.validation.Valid;
@@ -41,9 +42,7 @@ public class StudentRequest {
 	private String contactNumber;
 	private MeetingMode meetingMode;
 
-	@Min(value = 2, message = "groupSizePreference must be at least 2")
-	@Max(value = 10, message = "groupSizePreference must be at most 10")
-	private Integer groupSizePreference; // optional: null when left out
+	private GroupSizePreference groupSizePreference; // optional: null when left out
 
 	private List<StudyGoal> studyGoals;
 	private List<String> currentCourseCodes;
@@ -104,11 +103,11 @@ public class StudentRequest {
 		this.meetingMode = meetingMode;
 	}
 
-	public Integer getGroupSizePreference() {
+	public GroupSizePreference getGroupSizePreference() {
 		return groupSizePreference;
 	}
 
-	public void setGroupSizePreference(Integer groupSizePreference) {
+	public void setGroupSizePreference(GroupSizePreference groupSizePreference) {
 		this.groupSizePreference = groupSizePreference;
 	}
 

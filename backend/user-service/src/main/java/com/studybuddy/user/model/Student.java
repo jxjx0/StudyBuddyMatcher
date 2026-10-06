@@ -16,7 +16,7 @@ public class Student extends User {
 	private ArrayList<Course> coursesForStudying = new ArrayList<>();
 	private MeetingMode meetingMode;
 	private ArrayList<TimeSlot> weeklyAvailability = new ArrayList<>();
-	private int groupSizePreference;
+	private GroupSizePreference groupSizePreference;
 	private ArrayList<StudyGoal> studyGoals = new ArrayList<>();
 
 	public Student() {
@@ -176,12 +176,12 @@ public class Student extends User {
 	}
 	// end of Jessica part
 	
-	public int getGroupSizePreference() {
+	public GroupSizePreference getGroupSizePreference() {
 		return groupSizePreference;
 	}
 
-	public void setGroupSizePreference(int size) {
-		this.groupSizePreference = size;
+	public void setGroupSizePreference(GroupSizePreference preference) {
+		this.groupSizePreference = preference;
 	}
 
 	public ArrayList<StudyGoal> getStudyGoals() {
