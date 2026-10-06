@@ -578,6 +578,20 @@ body {
     color: #fff
 }
 
+.field-hint {
+    font-size: 10px;
+    font-style: normal;
+    color: #99918c
+}
+
+.field-hint.field-error {
+    color: #c2412d
+}
+
+.field input[aria-invalid=true] {
+    border-color: #c2412d
+}
+
 .field small,
 .form-section-title small {
     font-size: 10px;
@@ -1075,6 +1089,10 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
     margin: 16px 0
+}
+
+.field-wide {
+    grid-column: span 2
 }
 
 .field {
@@ -1594,6 +1612,10 @@ body {
     .stats-grid,
     .group-cards {
         grid-template-columns: 1fr
+    }
+
+    .field-wide {
+        grid-column: auto
     }
 
     .match-card,
