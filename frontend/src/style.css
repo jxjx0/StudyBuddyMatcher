@@ -285,6 +285,46 @@ body {
     order: 2
 }
 
+.discover-card>.pagination {
+    order: 4
+}
+
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px
+}
+
+.pagination button:disabled {
+    opacity: .45;
+    cursor: not-allowed
+}
+
+.page-number {
+    min-width: 34px;
+    height: 34px;
+    border: 1px solid #e8ded6;
+    border-radius: 10px;
+    background: #fff;
+    color: #6d5550;
+    font-size: 12px;
+    cursor: pointer
+}
+
+.page-number.active {
+    background: #25242b;
+    border-color: #25242b;
+    color: #fff
+}
+
+.page-range {
+    margin-left: auto;
+    color: #817873;
+    font-size: 12px
+}
+
 .discover-card>.profile-preview-panel {
     order: 5
 }
@@ -578,7 +618,22 @@ body {
     color: #fff
 }
 
-.field small {
+.field-hint {
+    font-size: 10px;
+    font-style: normal;
+    color: #99918c
+}
+
+.field-hint.field-error {
+    color: #c2412d
+}
+
+.field input[aria-invalid=true] {
+    border-color: #c2412d
+}
+
+.field small,
+.form-section-title small {
     font-size: 10px;
     color: #b2685d;
     font-weight: 500;
@@ -821,7 +876,12 @@ body {
     padding: 28px 16px 18px;
     display: flex;
     flex-direction: column;
-    min-height: 100vh
+    /* Stays in place while the page content scrolls; scrolls itself if the window is very short. */
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    overflow-y: auto
 }
 
 .brand,
@@ -1074,6 +1134,10 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
     margin: 16px 0
+}
+
+.field-wide {
+    grid-column: span 2
 }
 
 .field {
@@ -1459,8 +1523,22 @@ body {
     margin-top: 3px
 }
 
+.toast {
+    z-index: 50;
+    max-width: min(420px, calc(100vw - 50px))
+}
+
 .toast-check {
     color: #8ed29e
+}
+
+.toast-error {
+    background: #8f2f22
+}
+
+.toast-icon {
+    flex: 0 0 auto;
+    color: #ffd1c7
 }
 
 .auth-shell {
@@ -1546,6 +1624,22 @@ body {
     margin-top: 5px
 }
 
+.auth-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 14px
+}
+
+@media(max-width:480px) {
+    .auth-row {
+        grid-template-columns: 1fr
+    }
+}
+
+.auth-signup {
+    margin-top: 20px
+}
+
 .auth-switch {
     border: 0;
     background: none;
@@ -1593,6 +1687,10 @@ body {
     .stats-grid,
     .group-cards {
         grid-template-columns: 1fr
+    }
+
+    .field-wide {
+        grid-column: auto
     }
 
     .match-card,

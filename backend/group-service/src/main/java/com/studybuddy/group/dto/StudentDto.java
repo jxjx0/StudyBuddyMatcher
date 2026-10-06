@@ -1,6 +1,7 @@
 package com.studybuddy.group.dto;
 
 import com.studybuddy.group.model.AccountStatus;
+import com.studybuddy.group.model.GroupSizePreference;
 import com.studybuddy.group.model.MeetingMode;
 import com.studybuddy.group.model.StudyGoal;
 import com.studybuddy.group.model.TimeSlot;
@@ -31,7 +32,7 @@ public class StudentDto {
 	private int yearOfStudy;
 	private AccountStatus accountStatus;
 	private MeetingMode meetingMode;
-	private int groupSizePreference;
+	private GroupSizePreference groupSizePreference;
 	private List<StudyGoal> studyGoals = new ArrayList<>();
 	private List<CourseDto> currentCourses = new ArrayList<>();
 	private List<CourseDto> coursesForStudying = new ArrayList<>();
@@ -93,11 +94,11 @@ public class StudentDto {
 		this.meetingMode = meetingMode;
 	}
 
-	public int getGroupSizePreference() {
+	public GroupSizePreference getGroupSizePreference() {
 		return groupSizePreference;
 	}
 
-	public void setGroupSizePreference(int groupSizePreference) {
+	public void setGroupSizePreference(GroupSizePreference groupSizePreference) {
 		this.groupSizePreference = groupSizePreference;
 	}
 

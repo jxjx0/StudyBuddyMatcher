@@ -4,6 +4,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.studybuddy.user.model.AccountStatus;
 import com.studybuddy.user.model.Course;
+import com.studybuddy.user.model.GroupSizePreference;
 import com.studybuddy.user.model.MeetingMode;
 import com.studybuddy.user.model.Student;
 import com.studybuddy.user.model.StudyGoal;
@@ -15,7 +16,10 @@ import org.springframework.stereotype.Repository;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +34,8 @@ import java.util.UUID;
  * user_accounts, so a student must be saved there first: students.user_id
  * references it.
  */
+
+// StudentRepository calls from students table
 @Repository
 public class StudentRepository {
 	private final JdbcTemplate jdbc;
@@ -75,8 +81,7 @@ public class StudentRepository {
 				student.getYearOfStudy(), student.getContactNumber(), courseIds(student.getCurrentCourses()),
 				courseIds(student.getCoursesForStudying()),
 				student.getMeetingMode() == null ? null : student.getMeetingMode().name(), availability,
-				// 0 means no preference; stored as NULL so the BETWEEN 2 AND 10 check allows it.
-				student.getGroupSizePreference() == 0 ? null : student.getGroupSizePreference(),
+				student.getGroupSizePreference() == null ? null : student.getGroupSizePreference().name(),
 				student.getStudyGoals().stream().map(StudyGoal::name).toArray(String[]::new), student.getUserId() };
 	}
 
@@ -88,7 +93,8 @@ public class StudentRepository {
 
 	/** All profiles in the students table, ordered by email like UserRepository.findAllStudents(). */
 	public List<Student> findAll() {
-		return jdbc.query(SELECT_STUDENTS + " ORDER BY u.email", this::mapStudent);
+		Map<UUID, Course> courses = allCourses();
+		return jdbc.query(SELECT_STUDENTS + " ORDER BY u.email", (rs, row) -> mapStudent(rs, courses));
 	}
 
 	/** Loads a profile from the students table, with email and account status but no password hash. */
@@ -98,11 +104,12 @@ public class StudentRepository {
 		} catch (IllegalArgumentException | NullPointerException e) {
 			return Optional.empty();
 		}
-		return jdbc.query(SELECT_STUDENTS + " WHERE s.user_id = CAST(? AS uuid)", this::mapStudent, userId)
+		Map<UUID, Course> courses = allCourses();
+		return jdbc.query(SELECT_STUDENTS + " WHERE s.user_id = CAST(? AS uuid)", (rs, row) -> mapStudent(rs, courses), userId)
 				.stream().findFirst();
 	}
 
-	private Student mapStudent(ResultSet rs, int row) throws SQLException {
+	private Student mapStudent(ResultSet rs, Map<UUID, Course> courses) throws SQLException {
 		Student student = new Student();
 		student.setUserId(rs.getString("user_id"));
 		student.setEmail(rs.getString("email"));
@@ -114,9 +121,10 @@ public class StudentRepository {
 		student.setContactNumber(rs.getString("contact_number"));
 		String mode = rs.getString("meeting_mode");
 		student.setMeetingMode(mode == null ? null : MeetingMode.valueOf(mode));
-		student.setGroupSizePreference(rs.getInt("group_size_preference"));
-		student.getCurrentCourses().addAll(findCourses(rs.getArray("current_courses")));
-		student.getCoursesForStudying().addAll(findCourses(rs.getArray("courses_for_studying")));
+		String groupSize = rs.getString("group_size_preference");
+		student.setGroupSizePreference(groupSize == null ? null : GroupSizePreference.valueOf(groupSize));
+		student.getCurrentCourses().addAll(findCourses(rs.getArray("current_courses"), courses));
+		student.getCoursesForStudying().addAll(findCourses(rs.getArray("courses_for_studying"), courses));
 		for (String goal : strings(rs.getArray("study_goals")))
 			student.getStudyGoals().add(StudyGoal.valueOf(goal));
 		String availability = rs.getString("weekly_availability");
@@ -130,17 +138,21 @@ public class StudentRepository {
 		return student;
 	}
 
-	// The arrays only hold course ids, so the code and name are looked up in the
-	// courses table.
-	private List<Course> findCourses(Array ids) throws SQLException {
-		String[] courseIds = strings(ids);
-		if (courseIds.length == 0)
-			return List.of();
-		return jdbc.query(
-				"SELECT course_id, course_code, course_name FROM courses WHERE course_id = ANY(CAST(? AS uuid[]))",
-				(rs, row) -> new Course(rs.getObject("course_id", UUID.class), rs.getString("course_code"),
-						rs.getString("course_name")),
-				(Object) courseIds);
+	// The arrays only hold course ids, so the code and name come from the courses table. It is
+	// small, so it is read once per call rather than once per student: each query is a round trip
+	// to the database, and two per student made listing every student take tens of seconds.
+	private Map<UUID, Course> allCourses() {
+		Map<UUID, Course> courses = new HashMap<>();
+		jdbc.query("SELECT course_id, course_code, course_name FROM courses", rs -> {
+			UUID id = rs.getObject("course_id", UUID.class);
+			courses.put(id, new Course(id, rs.getString("course_code"), rs.getString("course_name")));
+		});
+		return courses;
+	}
+
+	// Ids with no matching course (e.g. a deleted course) are skipped.
+	private static List<Course> findCourses(Array ids, Map<UUID, Course> courses) throws SQLException {
+		return Arrays.stream(strings(ids)).map(id -> courses.get(UUID.fromString(id))).filter(Objects::nonNull).toList();
 	}
 
 	private static String[] courseIds(List<Course> courses) {

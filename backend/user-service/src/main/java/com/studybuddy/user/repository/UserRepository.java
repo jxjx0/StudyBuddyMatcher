@@ -4,6 +4,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.studybuddy.user.model.AccountStatus;
 import com.studybuddy.user.model.Course;
+import com.studybuddy.user.model.GroupSizePreference;
 import com.studybuddy.user.model.MeetingMode;
 import com.studybuddy.user.model.Student;
 import com.studybuddy.user.model.StudyGoal;
@@ -28,7 +29,7 @@ public class UserRepository {
 	// A record (Java 16+) is a short way to write a class that just holds data.
 	private record StudentProfile(String name, String school, String programme, int yearOfStudy,
 			String contactNumber, List<Course> currentCourses, List<Course> coursesForStudying,
-			MeetingMode meetingMode, List<TimeSlot> weeklyAvailability, int groupSizePreference,
+			MeetingMode meetingMode, List<TimeSlot> weeklyAvailability, GroupSizePreference groupSizePreference,
 			List<StudyGoal> studyGoals) { }
 
 	private final JdbcTemplate jdbc; // A Spring class for running SQL against the database (PostgreSQL here).

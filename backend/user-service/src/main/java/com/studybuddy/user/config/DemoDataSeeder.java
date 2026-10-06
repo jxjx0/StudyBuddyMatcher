@@ -2,11 +2,13 @@ package com.studybuddy.user.config;
 
 import com.studybuddy.user.model.AccountStatus;
 import com.studybuddy.user.model.Course;
+import com.studybuddy.user.model.GroupSizePreference;
 import com.studybuddy.user.model.MeetingMode;
 import com.studybuddy.user.model.StudyGoal;
 import com.studybuddy.user.model.Student;
 import com.studybuddy.user.model.SystemAdministrator;
 import com.studybuddy.user.repository.CourseRepository;
+import com.studybuddy.user.repository.StudentRepository;
 import com.studybuddy.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -14,7 +16,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 /** Optional local/demo population. Disabled unless DEMO_DATA_ENABLED=true. */
 @Component
@@ -37,25 +42,27 @@ public class DemoDataSeeder implements CommandLineRunner {
 			"Howard Chew", "Irene Lim", "Jeremy Ng", "Kayla Koh", "Leon Lee", "Michelle Goh", "Noah Wong",
 			"Olivia Teo", "Patrick Yeo", "Queenie Ong");
 	private final UserRepository users;
+	private final StudentRepository studentProfiles;
 	private final CourseRepository courses;
 	private final PasswordEncoder passwords;
 	private final boolean enabled;
 	private final String adminEmail;
 	private final String adminPassword;
 	private final String studentPassword;
-	public DemoDataSeeder(UserRepository users, CourseRepository courses, PasswordEncoder passwords,
+	public DemoDataSeeder(UserRepository users, StudentRepository studentProfiles, CourseRepository courses, PasswordEncoder passwords,
 			@Value("${app.seed.demo-data:false}") boolean enabled,
 			@Value("${app.seed.admin-email:admin@studybuds.sg}") String adminEmail,
 			@Value("${app.seed.admin-password:}") String adminPassword,
 			@Value("${app.seed.student-password:}") String studentPassword) {
-		this.users = users; this.courses = courses; this.passwords = passwords;
+		this.users = users; this.studentProfiles = studentProfiles; this.courses = courses; this.passwords = passwords;
 		this.enabled = enabled; this.adminEmail = adminEmail; this.adminPassword = adminPassword; this.studentPassword = studentPassword;
 	}
 	@Override public void run(String... args) {
 		if (!enabled) return;
 		if (adminPassword.length() < 8 || studentPassword.length() < 8)
 			throw new IllegalStateException("DEMO_DATA_ENABLED requires SEED_ADMIN_PASSWORD and SEED_STUDENT_PASSWORD (8+ characters each)");
-		COURSES.forEach(courses::save);
+		// Saved copies carry the database-generated course_id, which the students table stores.
+		List<Course> savedCourses = COURSES.stream().map(courses::save).toList();
 		if (users.findByEmail(adminEmail).isEmpty()) {
 			users.save(new SystemAdministrator(null, adminEmail, passwords.encode(adminPassword), "StudyBuds Admin"));
 		}
@@ -70,16 +77,29 @@ public class DemoDataSeeder implements CommandLineRunner {
 				case 3 -> "Economics"; case 4 -> "Law"; default -> "Social Sciences";
 			});
 			student.setYearOfStudy(1 + i % 4); student.setContactNumber(String.format("+65 8000 %04d", i));
-			student.setMeetingMode(MeetingMode.values()[i % MeetingMode.values().length]); student.setGroupSizePreference(2 + i % 5);
 			student.getStudyGoals().clear(); student.getCurrentCourses().clear(); student.getCoursesForStudying().clear(); student.getWeeklyAvailability().clear();
-			student.getStudyGoals().add(StudyGoal.values()[i % StudyGoal.values().length]);
-			student.getCurrentCourses().add(COURSES.get((i - 1) % COURSES.size()));
-			student.getCurrentCourses().add(COURSES.get(i % COURSES.size()));
-			student.getCoursesForStudying().add(COURSES.get((i - 1) % COURSES.size()));
+			// Seeded with the student number, so each student differs but keeps the same picks on every restart.
+			Random random = new Random(i);
+			// 2-4 current courses, 1 to all of them needing a buddy, and 1-4 study goals.
+			List<Course> current = pickRandom(savedCourses, 2 + random.nextInt(3), random);
+			student.getCurrentCourses().addAll(current);
+			student.getCoursesForStudying().addAll(pickRandom(current, 1 + random.nextInt(current.size()), random));
+			student.getStudyGoals().addAll(pickRandom(List.of(StudyGoal.values()), 1 + random.nextInt(StudyGoal.values().length), random));
+			student.setMeetingMode(MeetingMode.values()[random.nextInt(MeetingMode.values().length)]);
+			student.setGroupSizePreference(GroupSizePreference.values()[random.nextInt(GroupSizePreference.values().length)]);
 			student.getWeeklyAvailability().add(new com.studybuddy.user.model.TimeSlot(
 					new String[]{"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"}[i % 5],
 					LocalTime.of(16 + i % 4, 0), LocalTime.of(18 + i % 4, 0)));
 			users.save(student);
+			// The Discover page and profile lookups read the students table, so keep it in step.
+			if (!studentProfiles.update(student)) studentProfiles.save(student);
 		}
+	}
+
+	/** {@code count} distinct items from {@code items}, in random order. */
+	private static <T> List<T> pickRandom(List<T> items, int count, Random random) {
+		List<T> shuffled = new ArrayList<>(items);
+		Collections.shuffle(shuffled, random);
+		return shuffled.subList(0, count);
 	}
 }

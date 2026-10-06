@@ -85,7 +85,7 @@ public class StudentService {
 		student.updateProfile(request.getName(), request.getSchool(), request.getProgramme(),
 				request.getYearOfStudy(), request.getContactNumber());
 		student.setMeetingMode(request.getMeetingMode());
-		// Left out: a new student has no preference (0) and an update keeps the current value.
+		// Left out: a new student has no preference (null) and an update keeps the current value.
 		if (request.getGroupSizePreference() != null)
 			student.setGroupSizePreference(request.getGroupSizePreference());
 		if (request.getStudyGoals() != null) {
