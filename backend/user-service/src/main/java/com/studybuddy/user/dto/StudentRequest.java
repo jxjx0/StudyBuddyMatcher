@@ -7,6 +7,7 @@ import com.studybuddy.user.model.StudyGoal;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 
@@ -39,6 +40,9 @@ public class StudentRequest {
 	private int yearOfStudy;
 
 	@Size(max = 32, message = "contactNumber must be at most 32 characters")
+	// Same rule as the frontend: + and a country code, then digits, spaces or dashes. Null is allowed here;
+	// RegisterRequest makes it required at sign-up.
+	@Pattern(regexp = "^\\+\\d[\\d\\s-]{5,}$", message = "contactNumber must start with + and a country code, e.g. +65 8123 4567")
 	private String contactNumber;
 	private MeetingMode meetingMode;
 

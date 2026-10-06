@@ -14,13 +14,17 @@ const selectedProfile = ref(null)
 const selectedGroup = ref(null)
 const showAvailability = ref(false)
 const toastMessage = ref('')
+const toastType = ref('success')
 
 const courses = ref([])
 const smuSchools = ['School of Computing and Information Systems', 'School of Social Sciences', 'School of Business', 'School of Accountancy', 'School of Economics', 'School of Law']
 
 const profile = ref({ name: '', school: smuSchools[0], programme: '', year: 'Year 1', phone: '', currentCourses: [], buddyCourses: [], studyMode: 'Either', groupPreference: 'Either', goals: [], availability: [] })
-// Optional, but when given it must start with + and a country code, e.g. +65 8123 4567.
-const phoneError = computed(() => profile.value.phone.trim() && !/^\+\d[\d\s-]{5,}$/.test(profile.value.phone.trim()) ? 'Start with + and your country code, e.g. +65 8123 4567' : '')
+// A contact number must start with + and a country code, e.g. +65 8123 4567. Same rule as StudentRequest on the backend.
+const validPhone = phone => /^\+\d[\d\s-]{5,}$/.test(phone.trim())
+const phoneHint = 'Start with + and your country code, e.g. +65 8123 4567'
+// Optional on the profile page, but checked when given.
+const phoneError = computed(() => profile.value.phone.trim() && !validPhone(profile.value.phone) ? phoneHint : '')
 const draftCourse = ref(courses[0])
 const filters = ref({ course: '', availability: 'Any availability', mode: 'Any mode', goal: '', groupSize: 'Any group size' })
 const groupFilters = ref({ goal: '', mode: 'All study modes', availability: 'Any availability', size: 'Any maximum size' })
@@ -161,6 +165,24 @@ async function signIn(email, password) {
     go(userRole.value === 'admin' ? 'admin/dashboard' : 'student/discover')
   } catch (error) { authError.value = error.message || 'Unable to connect to StudyBuds.' }
 }
+// Creates a student account; the backend replies with a session like login does, so the student is signed straight in.
+async function signUp(details) {
+  authError.value = ''
+  try {
+    const response = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(details) })
+    const session = await response.json().catch(() => null)
+    if (!session) throw new Error('The server is not responding. It may still be starting up, so try again in a moment.')
+    if (!response.ok) throw new Error(session.message || 'Unable to create your account.')
+    loginRole.value = 'student'
+    saveSession(session)
+    await loadAppData()
+    go('student/discover')
+    toast(`Account created. Welcome to StudyBuds, ${session.user.name || details.name}!`)
+  } catch (error) {
+    authError.value = error.message || 'Unable to connect to StudyBuds.'
+    toast(`Could not create your account: ${authError.value}`, 'error')
+  }
+}
 async function loadMatchingConfiguration() {
   matchingConfigError.value = ''
   const config = await api('/api/matching/config')
@@ -180,7 +202,10 @@ async function saveMatchingConfiguration() {
   } catch (error) { toast(`Could not save matching configuration: ${error.message}`) }
 }
 function signOut() { clearSession(); router.push('/login') }
-function toast(message = 'Profile saved') { toastMessage.value = message; setTimeout(() => toastMessage.value = '', 2200) }
+// type is 'success' or 'error'; errors stay up longer so there is time to read them.
+// A new toast cancels the previous one's timer, so it is not hidden early.
+let toastTimer
+function toast(message = 'Profile saved', type = 'success') { toastMessage.value = message; toastType.value = type; clearTimeout(toastTimer); toastTimer = setTimeout(() => toastMessage.value = '', type === 'error' ? 4000 : 2500) }
 
 function addCourse() { if (draftCourse.value && !profile.value.currentCourses.includes(draftCourse.value)) profile.value.currentCourses.push(draftCourse.value) }
 function removeCourse(course) { profile.value.currentCourses = profile.value.currentCourses.filter(item => item !== course); profile.value.buddyCourses = profile.value.buddyCourses.filter(item => item !== course) }
@@ -211,13 +236,13 @@ export function useAppState() {
   return {
     authenticated, authError, loginRole, userRole,
     query, groupQuery, connectionTab, requestTab, showBuddyFilters, showGroupFilters,
-    selectedProfile, selectedGroup, showAvailability, toastMessage,
+    selectedProfile, selectedGroup, showAvailability, toastMessage, toastType,
     courses, smuSchools, profile, draftCourse, filters, groupFilters, dataError, loadAppData, usageSummary,
     matchingStrategy, matchingWeights, matchingCriteria, totalWeight, strategyHint, changeStrategy, setWeight, saveMatchingConfiguration, matchingConfigError,
     students, groups,
     accounts, accountSearch, accountRole, showAccountForm, editingAccount, accountDraft, visibleAccounts, openAccountForm, saveAccount, deleteAccount,
     nav, filteredStudents, buddyResultMessage, filteredGroups, matchingSlots,
-    go, signIn, signOut, toast, saveProfile, initialsOf, user, phoneError, loadPublicProfile, loadStudents,
+    go, signIn, signUp, validPhone, phoneHint, signOut, toast, saveProfile, initialsOf, user, phoneError, loadPublicProfile, loadStudents,
     addCourse, removeCourse, addAvailability, updateAvailability, removeAvailability,
     availabilityTimes, draggingAvailability, beginAvailability, extendAvailability, finishAvailability,
   }

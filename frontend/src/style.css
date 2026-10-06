@@ -1523,8 +1523,22 @@ body {
     margin-top: 3px
 }
 
+.toast {
+    z-index: 50;
+    max-width: min(420px, calc(100vw - 50px))
+}
+
 .toast-check {
     color: #8ed29e
+}
+
+.toast-error {
+    background: #8f2f22
+}
+
+.toast-icon {
+    flex: 0 0 auto;
+    color: #ffd1c7
 }
 
 .auth-shell {
@@ -1608,6 +1622,22 @@ body {
     width: 100%;
     padding: 13px;
     margin-top: 5px
+}
+
+.auth-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 14px
+}
+
+@media(max-width:480px) {
+    .auth-row {
+        grid-template-columns: 1fr
+    }
+}
+
+.auth-signup {
+    margin-top: 20px
 }
 
 .auth-switch {

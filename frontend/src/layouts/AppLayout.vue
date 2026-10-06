@@ -2,10 +2,10 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Check, ChevronRight, LogOut, Menu, Sparkles } from 'lucide-vue-next'
+import { ChevronRight, LogOut, Menu, Sparkles } from 'lucide-vue-next'
 import { useAppState } from '../composables/useAppState'
 
-const { userRole, nav, profile, user, toastMessage, go, signOut, initialsOf } = useAppState()
+const { userRole, nav, profile, user, go, signOut, initialsOf } = useAppState()
 const route = useRoute()
 const currentLabel = computed(() => nav.value.find(item => route.path === '/' + item.path)?.label)
 // A student's own profile name updates as they edit it; the login session's name covers the moment before it loads.
@@ -34,6 +34,5 @@ const displayName = computed(() => (userRole.value === 'student' && profile.valu
     </header>
     <router-view/>
   </main>
-  <div v-if="toastMessage" class="toast"><Check :size="16"/> {{toastMessage}}</div>
 </div>
 </template>
