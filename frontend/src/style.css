@@ -285,6 +285,46 @@ body {
     order: 2
 }
 
+.discover-card>.pagination {
+    order: 4
+}
+
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px
+}
+
+.pagination button:disabled {
+    opacity: .45;
+    cursor: not-allowed
+}
+
+.page-number {
+    min-width: 34px;
+    height: 34px;
+    border: 1px solid #e8ded6;
+    border-radius: 10px;
+    background: #fff;
+    color: #6d5550;
+    font-size: 12px;
+    cursor: pointer
+}
+
+.page-number.active {
+    background: #25242b;
+    border-color: #25242b;
+    color: #fff
+}
+
+.page-range {
+    margin-left: auto;
+    color: #817873;
+    font-size: 12px
+}
+
 .discover-card>.profile-preview-panel {
     order: 5
 }
@@ -836,7 +876,12 @@ body {
     padding: 28px 16px 18px;
     display: flex;
     flex-direction: column;
-    min-height: 100vh
+    /* Stays in place while the page content scrolls; scrolls itself if the window is very short. */
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    overflow-y: auto
 }
 
 .brand,

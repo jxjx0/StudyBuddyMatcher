@@ -74,7 +74,11 @@ const editingAccount = ref(null)
 const accountDraft = ref({ name: '', email: '', role: 'Student', status: 'Active', school: smuSchools[0] })
 const visibleAccounts = computed(() => accounts.value.filter(account => (accountRole.value === 'All roles' || account.role === accountRole.value) && (!accountSearch.value || `${account.name} ${account.email}`.toLowerCase().includes(accountSearch.value.toLowerCase()))))
 function openAccountForm(account = null) { editingAccount.value = account; accountDraft.value = account ? { ...account } : { name: '', email: '', role: 'Student', status: 'Active', school: smuSchools[0] }; showAccountForm.value = true }
-function api(path, options = {}) { return fetch(path, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}), ...options.headers } }).then(async response => { if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || `Request failed (${response.status})`) } return response.status === 204 ? null : response.json() }) }
+// Login tokens expire (JWT_TTL_MINUTES, 60 by default); send the user back to log in instead of failing every request.
+function expireSession() { clearSession(); authError.value = 'Your session has expired. Please log in again.'; router.push('/login') }
+function api(path, options = {}) { return fetch(path, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}), ...options.headers } }).then(async response => { if (response.status === 401 && token.value) { expireSession(); throw new Error('Your session has expired. Please log in again.') } if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || `Request failed (${response.status})`) } return response.status === 204 ? null : response.json() }) }
+// 'Jack Tan' -> 'JT'; 'SB' (StudyBuds) when there is no name yet.
+const initialsOf = name => (name || '').split(' ').filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'SB'
 const displayCourse = course => `${course.courseCode} ${course.courseName}`
 const modeLabels = { IN_PERSON: 'In-person', ONLINE: 'Online', EITHER: 'Either' }
 const groupSizeLabels = { ONE_TO_ONE: 'One-to-one', SMALL_GROUP: 'Small group', EITHER: 'Either' }
@@ -88,7 +92,7 @@ const shortDay = day => day.charAt(0) + day.slice(1, 3).toLowerCase()
 const to12h = time => { const [hour, minute] = time.split(':').map(Number); return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}` }
 const to24h = time => { const [, hour, minute, suffix] = time.match(/(\d+):(\d+)\s*(AM|PM)/); return `${String(Number(hour) % 12 + (suffix === 'PM' ? 12 : 0)).padStart(2, '0')}:${minute}:00` }
 const slotLabel = slot => ({ day: shortDay(slot.day), time: `${to12h(slot.startTime)} – ${to12h(slot.endTime)}` })
-function mapStudent(student) { const course = student.coursesForStudying?.[0] || student.currentCourses?.[0]; return { id: student.userId, name: student.name || 'Student', initials: (student.name || 'Student').split(' ').map(part => part[0]).join('').slice(0, 2), color: 'coral', school: student.school, programme: `${student.programme || student.school} · Year ${student.yearOfStudy}`, course: course ? displayCourse(course) : '', availability: (student.weeklyAvailability || []).map(slotLabel).map(slot => `${slot.day} ${slot.time}`).join(', ') || 'Flexible', goal: (student.studyGoals || []).map(goalLabel).join(', ') || 'Study together', mode: modeLabels[student.meetingMode] || 'Either', groupSize: groupSizeLabels[student.groupSizePreference] || 'Either', score: 80 } }
+function mapStudent(student) { const course = student.coursesForStudying?.[0] || student.currentCourses?.[0]; const goals = (student.studyGoals || []).map(goalLabel); return { id: student.userId, name: student.name || 'Student', initials: initialsOf(student.name), color: 'coral', school: student.school, programme: `${student.programme || student.school} · Year ${student.yearOfStudy}`, course: course ? displayCourse(course) : '', courseCodes: [...(student.coursesForStudying || []), ...(student.currentCourses || [])].map(item => item.courseCode.toLowerCase()), slots: student.weeklyAvailability || [], availability: (student.weeklyAvailability || []).map(slotLabel).map(slot => `${slot.day} ${slot.time}`).join(', ') || 'Flexible', goals, goal: goals.join(', ') || 'Study together', mode: modeLabels[student.meetingMode] || 'Either', groupSize: groupSizeLabels[student.groupSizePreference] || 'Either', score: 80 } }
 async function loadCourses() { courses.value = (await api('/api/courses')).map(displayCourse); if (!courses.value.includes(draftCourse.value)) draftCourse.value = courses.value[0] || '' }
 async function loadStudents() { students.value = (await api('/api/students')).filter(student => student.userId !== user.value?.userId).map(mapStudent) }
 async function loadAccounts() { accounts.value = (await api('/api/admin/accounts')).map(account => ({ id: account.userId, name: account.name, email: account.email, role: account.role === 'ADMIN' ? 'Admin' : 'Student', status: account.accountStatus === 'ACTIVE' ? 'Active' : 'Suspended', school: account.school || '—', currentCourseCount: account.currentCourseCount, studyGoalCount: account.studyGoalCount, availabilitySlotCount: account.availabilitySlotCount })) }
@@ -107,23 +111,34 @@ const nav = computed(() => userRole.value === 'admin'
   ? [{ label: 'Admin dashboard', path: 'admin/dashboard', icon: ShieldCheck }, { label: 'User accounts', path: 'admin/users', icon: Users }, { label: 'Matching configuration', path: 'admin/matching', icon: Sparkles }]
   : [{ label: 'Discover buddies', path: 'student/discover', icon: Sparkles }, { label: 'My connections', path: 'student/connections', icon: Users, badge: '4' }, { label: 'Study groups', path: 'student/groups', icon: Users }, { label: 'My profile', path: 'student/profile', icon: GraduationCap }])
 
+// A student's slots that fit the availability filter, as labels like 'Sat 10:00 AM – 12:00 PM'.
+// 'Weekends' means a Saturday or Sunday slot; 'Evenings' means a slot ending after 6 PM.
+function matchingSlots(student) {
+  const choice = filters.value.availability
+  return student.slots
+    .filter(slot => choice === 'Weekends' ? ['SATURDAY', 'SUNDAY'].includes(slot.day) : choice === 'Evenings' ? slot.endTime > '18:00' : true)
+    .map(slotLabel).map(slot => `${slot.day} ${slot.time}`)
+}
+// Every student is listed until a filter narrows it down. A student who chose 'Either'
+// for study mode or group size matches whichever option is filtered on.
 const filteredStudents = computed(() => {
   const course = filters.value.course.trim().toLowerCase()
   const goal = filters.value.goal.trim().toLowerCase()
-  if (!course && !goal) return []
+  const name = query.value.trim().toLowerCase()
   return students.value.filter(student => {
-    const matchesCourse = course && student.course.toLowerCase().includes(course)
-    const matchesGoal = goal && student.goal.toLowerCase() === goal
-    const matchesName = !query.value || student.name.toLowerCase().includes(query.value.trim().toLowerCase())
-    const matchesMode = filters.value.mode === 'Any mode' || student.mode.toLowerCase().includes(filters.value.mode.toLowerCase())
-    const matchesAvailability = filters.value.availability === 'Any availability' || student.availability.toLowerCase().includes(filters.value.availability.toLowerCase())
-    return matchesName && (matchesCourse || matchesGoal) && matchesMode && matchesAvailability
+    const matchesCourse = course && student.courseCodes.includes(course)
+    const matchesGoal = goal && student.goals.some(item => item.toLowerCase() === goal)
+    const matchesName = !name || student.name.toLowerCase().includes(name)
+    const matchesMode = filters.value.mode === 'Any mode' || student.mode === 'Either' || student.mode === filters.value.mode
+    const matchesGroupSize = filters.value.groupSize === 'Any group size' || student.groupSize === 'Either' || student.groupSize === filters.value.groupSize
+    const matchesAvailability = filters.value.availability === 'Any availability' || matchingSlots(student).length > 0
+    return matchesName && (!course && !goal || matchesCourse || matchesGoal) && matchesMode && matchesGroupSize && matchesAvailability
   })
 })
 const buddyResultMessage = computed(() => {
-  if (!filters.value.course.trim() && !filters.value.goal.trim()) return 'Choose a course match, a study goal, or both. At least one is required to show matches.'
+  if (!students.value.length) return 'No other students have signed up yet.'
   if (!filteredStudents.value.length) return 'No students match those filters yet. Try another course, goal, availability, or study mode.'
-  return `${filteredStudents.value.length} matching students found.`
+  return `${filteredStudents.value.length} students found.`
 })
 const filteredGroups = computed(() => groups.filter(g => (!groupQuery.value || g.name.toLowerCase().includes(groupQuery.value.toLowerCase())) && (!groupFilters.value.course || g.course.includes(groupFilters.value.course)) && (!groupFilters.value.goal || g.goal === groupFilters.value.goal) && (groupFilters.value.mode === 'All study modes' || g.mode === groupFilters.value.mode) && (groupFilters.value.availability === 'Any availability' || g.availability.includes(groupFilters.value.availability)) && (groupFilters.value.size === 'Any maximum size' || g.size <= Number(groupFilters.value.size))))
 
@@ -136,7 +151,9 @@ async function signIn(email, password) {
   authError.value = ''
   try {
     const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
-    const session = await response.json()
+    // While the backend is down or still starting, the gateway/dev proxy answers with an empty body.
+    const session = await response.json().catch(() => null)
+    if (!session) throw new Error('The server is not responding. It may still be starting up, so try again in a moment.')
     if (!response.ok) throw new Error(session.message || 'Unable to log in. Check your email and password.')
     if (session.user.role.toLowerCase() !== loginRole.value) throw new Error(`This account is registered as ${session.user.role.toLowerCase()}. Choose the matching login type.`)
     saveSession(session)
@@ -199,8 +216,8 @@ export function useAppState() {
     matchingStrategy, matchingWeights, matchingCriteria, totalWeight, strategyHint, changeStrategy, setWeight, saveMatchingConfiguration, matchingConfigError,
     students, groups,
     accounts, accountSearch, accountRole, showAccountForm, editingAccount, accountDraft, visibleAccounts, openAccountForm, saveAccount, deleteAccount,
-    nav, filteredStudents, buddyResultMessage, filteredGroups,
-    go, signIn, signOut, toast, saveProfile, phoneError, loadPublicProfile,
+    nav, filteredStudents, buddyResultMessage, filteredGroups, matchingSlots,
+    go, signIn, signOut, toast, saveProfile, initialsOf, user, phoneError, loadPublicProfile, loadStudents,
     addCourse, removeCourse, addAvailability, updateAvailability, removeAvailability,
     availabilityTimes, draggingAvailability, beginAvailability, extendAvailability, finishAvailability,
   }

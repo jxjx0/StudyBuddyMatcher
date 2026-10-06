@@ -4,8 +4,8 @@ import { computed } from 'vue'
 import { CalendarDays, Check, ChevronRight, Plus, X } from 'lucide-vue-next'
 import { useAppState } from '../../composables/useAppState'
 
-const { profile, smuSchools, draftCourse, courses, addCourse, removeCourse, showAvailability, go, toast, saveProfile, phoneError, addAvailability } = useAppState()
-const initials = computed(() => profile.value.name.split(' ').filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'SB')
+const { profile, smuSchools, draftCourse, courses, addCourse, removeCourse, showAvailability, go, toast, saveProfile, phoneError, addAvailability, initialsOf } = useAppState()
+const initials = computed(() => initialsOf(profile.value.name))
 </script>
 
 <template>
