@@ -12,23 +12,30 @@ import java.util.Optional;
 @Repository
 public class StudyBuddyConnectionRepository {
 
+	private final java.util.Map<String, StudyBuddyConnection> storage = new java.util.concurrent.ConcurrentHashMap<>();
+
 	public List<StudyBuddyConnection> findAll() {
-		// TODO: implement
-		return List.of();
+		return new java.util.ArrayList<>(storage.values());
 	}
 
 	public Optional<StudyBuddyConnection> findById(String connectionId) {
-		// TODO: implement
-		return Optional.empty();
+		if (connectionId == null) return Optional.empty();
+		return Optional.ofNullable(storage.get(connectionId));
 	}
 
 	public List<StudyBuddyConnection> findActiveByStudentId(String studentId) {
-		// TODO: implement
-		return List.of();
+		if (studentId == null) return List.of();
+		return storage.values().stream()
+				.filter(conn -> conn.isActive() && conn.involves(studentId))
+				.collect(java.util.stream.Collectors.toList());
 	}
 
 	public StudyBuddyConnection save(StudyBuddyConnection connection) {
-		// TODO: implement
+		if (connection == null) return null;
+		if (connection.getConnectionId() == null || connection.getConnectionId().trim().isEmpty()) {
+			connection.setConnectionId(java.util.UUID.randomUUID().toString());
+		}
+		storage.put(connection.getConnectionId(), connection);
 		return connection;
 	}
 }

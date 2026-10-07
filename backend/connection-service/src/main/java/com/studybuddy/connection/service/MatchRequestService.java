@@ -28,45 +28,72 @@ public class MatchRequestService {
 	}
 
 	public List<MatchRequest> findAll() {
-		// TODO: implement
-		return List.of();
+		return matchRequestRepository.findAll();
 	}
 
 	public MatchRequest findById(String requestId) {
-		// TODO: implement - throw when absent
-		return null;
+		return matchRequestRepository.findById(requestId)
+				.orElseThrow(() -> new IllegalArgumentException("MatchRequest not found with id: " + requestId));
 	}
 
 	public List<MatchRequest> findPendingFor(String studentId) {
-		// TODO: implement
-		return List.of();
+		if (studentId == null) return List.of();
+		return matchRequestRepository.findByRecipientId(studentId).stream()
+				.filter(MatchRequest::isPending)
+				.collect(java.util.stream.Collectors.toList());
 	}
 
 	public MatchRequest send(String senderId, String recipientId, String message) {
-		// TODO: implement
-		return null;
+		if (senderId == null || recipientId == null) {
+			throw new IllegalArgumentException("Sender and recipient IDs must not be null");
+		}
+		if (senderId.equals(recipientId)) {
+			throw new IllegalArgumentException("Cannot send match request to yourself");
+		}
+		MatchRequest request = new MatchRequest();
+		request.setSenderId(senderId);
+		request.setRecipientId(recipientId);
+		request.setMessage(message);
+		return matchRequestRepository.save(request);
 	}
 
 	/**
 	 * Accept a request and open the connection it produces.
 	 */
 	public StudyBuddyConnection accept(String requestId, String respondentId) {
-		// TODO: implement - check canBeRespondedBy, accept the request, then
-		// build and save the connection
-		return null;
+		MatchRequest request = findById(requestId);
+		if (!request.canBeRespondedBy(respondentId)) {
+			throw new IllegalStateException("Student " + respondentId + " is not authorized to respond to this request");
+		}
+		request.accept();
+		matchRequestRepository.save(request);
+
+		StudyBuddyConnection connection = new StudyBuddyConnection();
+		connection.setStudentAId(request.getSenderId());
+		connection.setStudentBId(request.getRecipientId());
+		return connectionRepository.save(connection);
 	}
 
 	public MatchRequest decline(String requestId, String respondentId) {
-		// TODO: implement - check canBeRespondedBy first
-		return null;
+		MatchRequest request = findById(requestId);
+		if (!request.canBeRespondedBy(respondentId)) {
+			throw new IllegalStateException("Student " + respondentId + " is not authorized to respond to this request");
+		}
+		request.decline();
+		return matchRequestRepository.save(request);
 	}
 
 	public List<StudyBuddyConnection> findActiveConnections(String studentId) {
-		// TODO: implement
-		return List.of();
+		return connectionRepository.findActiveByStudentId(studentId);
 	}
 
 	public void endConnection(String connectionId, String requesterId) {
-		// TODO: implement - only a student in the connection may end it
+		StudyBuddyConnection connection = connectionRepository.findById(connectionId)
+				.orElseThrow(() -> new IllegalArgumentException("Connection not found with id: " + connectionId));
+		if (!connection.involves(requesterId)) {
+			throw new IllegalStateException("Student " + requesterId + " is not part of this connection");
+		}
+		connection.end();
+		connectionRepository.save(connection);
 	}
 }
