@@ -5,13 +5,10 @@ import router from '../router'
 import { authenticated, authError, loginRole, userRole, user, token, saveSession, clearSession } from './useAuth'
 
 const query = ref('')
-const groupQuery = ref('')
 const connectionTab = ref('active')
 const requestTab = ref('incoming')
 const showBuddyFilters = ref(false)
-const showGroupFilters = ref(false)
 const selectedProfile = ref(null)
-const selectedGroup = ref(null)
 const showAvailability = ref(false)
 const toastMessage = ref('')
 const toastType = ref('success')
@@ -27,7 +24,6 @@ const phoneHint = 'Start with + and your country code, e.g. +65 8123 4567'
 const phoneError = computed(() => profile.value.phone.trim() && !validPhone(profile.value.phone) ? phoneHint : '')
 const draftCourse = ref(courses[0])
 const filters = ref({ course: '', availability: 'Any availability', mode: 'Any mode', goal: '', groupSize: 'Any group size' })
-const groupFilters = ref({ goal: '', mode: 'All study modes', availability: 'Any availability', size: 'Any maximum size' })
 
 const matchingStrategy = ref('')
 const matchingWeights = ref({ course: 30, availability: 20, mode: 20, goal: 20, groupSize: 10 })
@@ -67,7 +63,6 @@ function setWeight(key, value) {
 }
 
 const students = ref([])
-const groups = [{ name: 'Data Structures Deep Dive', course: 'CS204 Data Structures', meta: '4 / 6 members', time: 'Tue & Thu · 6:00 PM', goal: 'Exam preparation', mode: 'Online', availability: 'Tue & Thu', size: 6, description: 'Weekly sessions for concepts, practice problems, and exam preparation.', score: 94 }, { name: 'Algorithms & Coffee', course: 'CS301 Algorithms', meta: '3 / 5 members', time: 'Sat · 10:00 AM', goal: 'Problem solving', mode: 'In-person', availability: 'Weekends', size: 5, description: 'A friendly weekend crew for whiteboard practice and accountability.', score: 88 }]
 const accounts = ref([])
 const dataError = ref('')
 const usageSummary = ref({ totalAccounts: 0, students: 0, activeStudents: 0, administrators: 0 })
@@ -144,12 +139,10 @@ const buddyResultMessage = computed(() => {
   if (!filteredStudents.value.length) return 'No students match those filters yet. Try another course, goal, availability, or study mode.'
   return `${filteredStudents.value.length} students found.`
 })
-const filteredGroups = computed(() => groups.filter(g => (!groupQuery.value || g.name.toLowerCase().includes(groupQuery.value.toLowerCase())) && (!groupFilters.value.course || g.course.includes(groupFilters.value.course)) && (!groupFilters.value.goal || g.goal === groupFilters.value.goal) && (groupFilters.value.mode === 'All study modes' || g.mode === groupFilters.value.mode) && (groupFilters.value.availability === 'Any availability' || g.availability.includes(groupFilters.value.availability)) && (groupFilters.value.size === 'Any maximum size' || g.size <= Number(groupFilters.value.size))))
 
 function go(next) {
   router.push('/' + next)
   if (next !== 'student/public-profile') selectedProfile.value = null
-  selectedGroup.value = null
 }
 async function signIn(email, password) {
   authError.value = ''
@@ -235,13 +228,13 @@ function finishAvailability() {
 export function useAppState() {
   return {
     authenticated, authError, loginRole, userRole,
-    query, groupQuery, connectionTab, requestTab, showBuddyFilters, showGroupFilters,
-    selectedProfile, selectedGroup, showAvailability, toastMessage, toastType,
-    courses, smuSchools, profile, draftCourse, filters, groupFilters, dataError, loadAppData, usageSummary,
+    query, connectionTab, requestTab, showBuddyFilters,
+    selectedProfile, showAvailability, toastMessage, toastType,
+    courses, smuSchools, profile, draftCourse, filters, dataError, loadAppData, usageSummary,
     matchingStrategy, matchingWeights, matchingCriteria, totalWeight, strategyHint, changeStrategy, setWeight, saveMatchingConfiguration, matchingConfigError,
-    students, groups,
+    students,
     accounts, accountSearch, accountRole, showAccountForm, editingAccount, accountDraft, visibleAccounts, openAccountForm, saveAccount, deleteAccount,
-    nav, filteredStudents, buddyResultMessage, filteredGroups, matchingSlots,
+    nav, filteredStudents, buddyResultMessage, matchingSlots,
     go, signIn, signUp, validPhone, phoneHint, signOut, toast, saveProfile, initialsOf, user, phoneError, loadPublicProfile, loadStudents,
     addCourse, removeCourse, addAvailability, updateAvailability, removeAvailability,
     availabilityTimes, draggingAvailability, beginAvailability, extendAvailability, finishAvailability,

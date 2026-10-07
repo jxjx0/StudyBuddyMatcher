@@ -94,3 +94,7 @@ cd backend
 ```
 
 Replace `user-service` with the service you want to start.
+
+## Study groups
+
+See [Lwin’s study-group implementation and local demo guide](docs/study-groups.md) for group rules, API routes, database setup, isolated tests and the added-file list.
