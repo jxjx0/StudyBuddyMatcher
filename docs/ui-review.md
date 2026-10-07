@@ -2,6 +2,8 @@
 
 Reviewed and updated on 8 October 2026 on `feat/study-groups`.
 
+The subsequent [study-group usability review](study-groups-ux-review.md) covers the close-group fix, all related group flows, completed browser actions and additional UI regression tests. The evidence below describes the earlier general pass.
+
 The existing Vue app keeps its warm colours and DM Sans typography. This pass makes its controls easier to read and use, fixes misleading feedback, and separates large blocks of frontend logic into named components and modules. It does not add a new component library or change the Java services or shared database schema.
 
 ## Screen coverage

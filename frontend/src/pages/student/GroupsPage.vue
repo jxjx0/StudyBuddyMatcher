@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 import { Plus, Search, Users } from "lucide-vue-next";
 import { useGroups } from "../../composables/useGroups";
-import { useAppState } from "../../composables/useAppState";
 import GroupEditor from "../../components/groups/GroupEditor.vue";
 import GroupDetails from "../../components/groups/GroupDetails.vue";
 import {
@@ -27,7 +26,8 @@ const {
   closeDetail,
   mutate,
 } = useGroups();
-const { toast } = useAppState();
+const notice = ref("");
+const groupStatus = ref("ACTIVE");
 const tab = ref("browse");
 const query = ref("");
 const course = ref("");
@@ -46,6 +46,8 @@ const views = [
 const visible = computed(() => {
   const source = tab.value === "mine" ? mine.value : groups.value;
   return source.filter((group) => {
+    if (tab.value === "mine" && group.status !== groupStatus.value)
+      return false;
     if (
       !group.groupName.toLowerCase().includes(query.value.trim().toLowerCase())
     )
@@ -78,6 +80,7 @@ function resetFilters() {
 }
 function statusLabel(group) {
   if (group.status === "CLOSED") return "Closed";
+  if (!group.leaderAvailable) return "Requests paused";
   if (group.memberCount >= group.maxGroupSize) return "Full";
   return "Open to join";
 }
@@ -89,20 +92,37 @@ function membershipLabel(group) {
 }
 function edit(group = null) {
   error.value = "";
+  notice.value = "";
   editingGroup.value = group;
   editorOpen.value = true;
 }
 async function save(draft) {
   const id = editingGroup.value?.groupId;
   const path = id ? `/api/groups/${id}` : "/api/groups";
-  if (await mutate(path, id ? "PUT" : "POST", draft)) {
+  if (await mutate(path, id ? "PUT" : "POST", draft, { dismissDetail: true })) {
     editorOpen.value = false;
     tab.value = "mine";
-    toast(id ? "Group updated" : "Group created");
+    groupStatus.value = "ACTIVE";
+    resetFilters();
+    notice.value = id
+      ? "Group updated."
+      : "Group created. Other students can now request to join.";
   }
 }
-async function action({ path, message, method }) {
-  if (await mutate(path, method)) toast(message);
+async function action({ path, message, method, endGroup }) {
+  notice.value = "";
+  if (!(await mutate(path, method, undefined, { dismissDetail: endGroup })))
+    return;
+  notice.value = message;
+  if (endGroup) {
+    tab.value = "mine";
+    groupStatus.value = "CLOSED";
+    resetFilters();
+  }
+}
+function viewGroup(id) {
+  notice.value = "";
+  open(id);
 }
 function formatDate(value) {
   return new Date(value).toLocaleDateString(undefined, {
@@ -150,9 +170,37 @@ function formatDate(value) {
         Try again
       </button>
     </div>
+    <p
+      v-if="notice && !selected && !editorOpen"
+      class="group-notice"
+      role="status"
+    >
+      {{ notice }}
+    </p>
     <p v-if="loading" role="status">Loading groups…</p>
     <p v-if="detailLoading" role="status">Opening group…</p>
     <template v-if="!loading && tab !== 'requests'">
+      <div
+        v-if="tab === 'mine'"
+        class="group-status-controls"
+        aria-label="My group status"
+      >
+        <button
+          v-for="status in ['ACTIVE', 'CLOSED']"
+          :key="status"
+          class="secondary-button"
+          :aria-pressed="groupStatus === status"
+          @click="groupStatus = status"
+        >
+          {{ labelOf(status) }} ({{
+            mine.filter((group) => group.status === status).length
+          }})
+        </button>
+      </div>
+      <p v-if="tab === 'mine' && groupStatus === 'CLOSED'" class="hint">
+        Closed groups are kept for reference. Create a new group to study
+        together again.
+      </p>
       <div class="filter-surface">
         <div class="group-search">
           <label class="search-box"
@@ -219,7 +267,10 @@ function formatDate(value) {
         </div>
       </div>
       <div class="results-heading">
-        <p role="status">{{ visible.length }} groups found</p>
+        <p role="status">
+          {{ visible.length }}
+          {{ visible.length === 1 ? "group" : "groups" }} found
+        </p>
         <button class="text-button" @click="resetFilters">Reset filters</button>
       </div>
       <div v-if="visible.length" class="group-cards">
@@ -247,8 +298,7 @@ function formatDate(value) {
           </div>
           <p class="hint">
             {{
-              group.studyGoals.map(labelOf).join(", ") ||
-              "Flexible study goals"
+              group.studyGoals.map(labelOf).join(", ") || "Flexible study goals"
             }}
           </p>
           <footer>
@@ -256,7 +306,7 @@ function formatDate(value) {
               class="secondary-button"
               :disabled="busy"
               :aria-label="`View ${group.groupName}`"
-              @click="open(group.groupId)"
+              @click="viewGroup(group.groupId)"
             >
               View group</button
             ><span class="hint">{{ membershipLabel(group) }}</span>
@@ -265,11 +315,19 @@ function formatDate(value) {
       </div>
       <div v-else-if="!error" class="empty-state">
         <Users :size="32" />
-        <h2>{{ tab === "mine" ? "No groups here yet" : "No groups found" }}</h2>
+        <h2>{{ tab === "mine" ? "No matching groups" : "No groups found" }}</h2>
         <p>
-          Create a group for your course, or reset your filters to explore more.
+          Try a different search or reset your filters. You can also create a
+          group for your course.
         </p>
         <div class="form-actions">
+          <button
+            class="primary-button"
+            :disabled="busy || !courses.length"
+            @click="edit()"
+          >
+            Create group
+          </button>
           <button class="secondary-button" @click="resetFilters">
             Reset filters</button
           ><button
@@ -308,7 +366,7 @@ function formatDate(value) {
         <button
           class="secondary-button"
           :disabled="busy"
-          @click="open(request.groupId)"
+          @click="viewGroup(request.groupId)"
         >
           View group
         </button>
@@ -316,6 +374,7 @@ function formatDate(value) {
     >
     <GroupDetails
       :group="selected"
+      :notice="notice"
       :requests="leaderRequests"
       :busy="busy"
       :error="error"

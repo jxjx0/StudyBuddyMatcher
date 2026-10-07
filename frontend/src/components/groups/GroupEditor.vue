@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, watch } from "vue";
+import { nextTick, reactive, ref, watch } from "vue";
 import AppDialog from "../AppDialog.vue";
 import {
   studyGoals,
@@ -18,12 +18,16 @@ const props = defineProps({
 const emit = defineEmits(["close", "save"]);
 const validationError = ref("");
 const draft = reactive({});
+const originalDraft = ref("");
+const discardOpen = ref(false);
+const errorMessage = ref(null);
 watch(
   () => props.open,
   (open) => {
     if (!open) return;
     const group = props.group;
     validationError.value = "";
+    discardOpen.value = false;
     Object.assign(draft, {
       groupName: group?.groupName || "",
       description: group?.description || "",
@@ -33,6 +37,7 @@ watch(
       studyGoals: [...(group?.studyGoals || [])],
       availability: (group?.availability || []).map((slot) => ({ ...slot })),
     });
+    originalDraft.value = JSON.stringify(draft);
   },
   { immediate: true },
 );
@@ -46,16 +51,33 @@ function addSlot() {
 function removeSlot(index) {
   draft.availability.splice(index, 1);
 }
+function requestClose() {
+  if (props.busy) return;
+  if (JSON.stringify(draft) !== originalDraft.value) {
+    discardOpen.value = true;
+    return;
+  }
+  emit("close");
+}
+function discard() {
+  discardOpen.value = false;
+  emit("close");
+}
+async function showProblem(message) {
+  validationError.value = message;
+  await nextTick();
+  errorMessage.value?.focus();
+}
 function save() {
   validationError.value = "";
   if (!draft.groupName.trim()) {
-    validationError.value = "Give your group a name.";
+    showProblem("Give your group a name.");
     return;
   }
-  for (const slot of draft.availability) {
+  for (const [index, slot] of draft.availability.entries()) {
     const problem = slotProblem(slot.day, slot.startTime, slot.endTime);
     if (problem) {
-      validationError.value = problem;
+      showProblem(`Time slot ${index + 1}: ${problem}`);
       return;
     }
   }
@@ -67,7 +89,7 @@ function save() {
     :open="open"
     :title="group ? 'Edit group' : 'Create a study group'"
     :busy="busy"
-    @close="emit('close')"
+    @close="requestClose"
   >
     <form v-if="open" @submit.prevent="save">
       <fieldset class="plain-fieldset stacked-form" :disabled="busy">
@@ -174,7 +196,13 @@ function save() {
           </button>
         </fieldset>
       </fieldset>
-      <p v-if="validationError || error" class="error-message" role="alert">
+      <p
+        v-if="validationError || error"
+        ref="errorMessage"
+        tabindex="-1"
+        class="error-message"
+        role="alert"
+      >
         {{ validationError || error }}
       </p>
       <div class="dialog-footer">
@@ -184,11 +212,25 @@ function save() {
           type="button"
           class="secondary-button"
           :disabled="busy"
-          @click="emit('close')"
+          @click="requestClose"
         >
           Cancel
         </button>
       </div>
     </form>
+  </AppDialog>
+  <AppDialog
+    :open="discardOpen"
+    title="Discard your changes?"
+    close-label="Keep editing"
+    @close="discardOpen = false"
+  >
+    <p>Your changes have not been saved. Keep editing to finish your group.</p>
+    <div class="dialog-footer">
+      <button class="secondary-button" autofocus @click="discardOpen = false">
+        Keep editing
+      </button>
+      <button class="danger-button" @click="discard">Discard changes</button>
+    </div>
   </AppDialog>
 </template>

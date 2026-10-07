@@ -147,3 +147,5 @@ Paths below are relative to the repository root.
 Existing files changed: group-service's POM/application configuration, StudentClient, StudyGroupController, StudyGroup, GroupJoinRequest, both repositories, StudyGroupService; frontend GroupsPage and the removal of group-only mock state in useAppState; and the root README link to this guide. Existing tracked frontend build output is excluded from the change.
 
 The October UI pass separates the editor and details into `frontend/src/components/groups/GroupEditor.vue` and `GroupDetails.vue`. See [UI review](ui-review.md) for the full screen inventory, added files and browser verification.
+
+The follow-up [study-group usability review](study-groups-ux-review.md) documents the distinct Done/End group flow, Active/Closed views, protected drafts and 19 group UI regression tests. Run them with the existing utility tests using `npm --prefix frontend test` (Node 22.22.2+, 24.15.0+, or 26+).

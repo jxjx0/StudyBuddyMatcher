@@ -901,6 +901,33 @@ dd {
   margin-top: 20px;
   background: #fff3ee;
 }
+.group-notice {
+  color: #28543d;
+  background: #eaf3ed;
+  border: 1px solid #a4c6b1;
+  border-radius: 9px;
+  padding: 14px 16px;
+  margin: 16px 0;
+}
+.group-status-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0 12px;
+}
+.group-status-controls [aria-pressed="true"] {
+  color: var(--accent);
+  background: #fff0eb;
+  border-color: var(--accent);
+}
+.group-detail-actions {
+  position: sticky;
+  bottom: 0;
+  padding-bottom: 16px;
+}
+.end-group-action {
+  margin-left: auto;
+}
 
 /* Admin */
 .stats-grid {

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, nextTick } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import AppDialog from "../AppDialog.vue";
 import { labelOf, slotText } from "../../utils/studyData";
 const props = defineProps({
@@ -7,15 +7,19 @@ const props = defineProps({
   requests: Array,
   busy: Boolean,
   error: String,
+  notice: String,
 });
 const emit = defineEmits(["close", "edit", "action"]);
 const confirmation = ref(null);
-const confirmationPanel = ref(null);
-watch(confirmation, async (value) => {
-  if (!value) return;
-  await nextTick();
-  confirmationPanel.value?.focus();
-});
+const noticePanel = ref(null);
+watch(
+  () => props.notice,
+  async (message) => {
+    if (!message) return;
+    await nextTick();
+    noticePanel.value?.focus();
+  },
+);
 watch(
   () => props.group,
   () => {
@@ -33,8 +37,8 @@ const joiningMessage = computed(() => {
   if (group.memberCount >= group.maxGroupSize) return "This group is full.";
   return "Joining is unavailable.";
 });
-function sendAction(path, message, method = "POST") {
-  emit("action", { path, message, method });
+function sendAction(path, message, method = "POST", endGroup = false) {
+  emit("action", { path, message, method, endGroup });
 }
 function requestToJoin() {
   sendAction(
@@ -62,17 +66,18 @@ function confirmRemove(member) {
 }
 function confirmClose() {
   confirmation.value = {
-    title: "Close this group?",
-    text: "All pending requests will be rejected. The group cannot be reopened.",
+    title: "End this study group?",
+    text: `“${props.group.groupName}” will be closed to new members. All pending requests will be rejected. This cannot be undone.`,
     path: `/api/groups/${props.group.groupId}/close`,
     method: "POST",
-    message: "Group closed",
-    button: "Close group",
+    message: `“${props.group.groupName}” is now closed. You can find it under My groups → Closed.`,
+    button: "End group permanently",
+    endGroup: true,
   };
 }
 function confirm() {
   const action = confirmation.value;
-  sendAction(action.path, action.message, action.method);
+  sendAction(action.path, action.message, action.method, action.endGroup);
 }
 </script>
 <template>
@@ -80,9 +85,23 @@ function confirm() {
     :open="Boolean(group)"
     :title="group?.groupName || 'Group details'"
     :busy="busy"
+    close-label="Back to groups"
     @close="emit('close')"
   >
     <template v-if="group">
+      <p
+        v-if="notice"
+        ref="noticePanel"
+        tabindex="-1"
+        class="group-notice"
+        role="status"
+      >
+        {{ notice }}
+      </p>
+      <p v-if="group.status === 'CLOSED'" class="feature-note">
+        This group has ended. Its details and request history are kept here for
+        reference. You cannot edit it, add members or reopen it.
+      </p>
       <div class="chip-list">
         <span class="tag">{{ group.courseCode }}</span
         ><span class="tag">{{ labelOf(group.status) }}</span
@@ -102,8 +121,7 @@ function confirm() {
           <dt>Study goals</dt>
           <dd>
             {{
-              group.studyGoals.map(labelOf).join(", ") ||
-              "Flexible study goals"
+              group.studyGoals.map(labelOf).join(", ") || "Flexible study goals"
             }}
           </dd>
         </div>
@@ -124,7 +142,10 @@ function confirm() {
       >
         {{ busy ? "Sending…" : "Request to join" }}
       </button>
-      <p v-else-if="!group.isMember" class="feature-note">
+      <p
+        v-else-if="!group.isMember && group.status !== 'CLOSED'"
+        class="feature-note"
+      >
         {{ joiningMessage }}
       </p>
       <section class="form-section">
@@ -157,7 +178,11 @@ function confirm() {
         ><section class="form-section">
           <h3>Join requests</h3>
           <p v-if="!requests.length" class="hint">
-            No requests yet. New requests will appear here.
+            {{
+              group.status === "CLOSED"
+                ? "This group ended without any join requests."
+                : "No requests yet. New requests will appear here."
+            }}
           </p>
           <div
             v-for="request in requests"
@@ -199,43 +224,53 @@ function confirm() {
             The group is full. Increase its size before accepting more members.
           </p>
         </section>
-        <div v-if="group.status === 'ACTIVE'" class="dialog-footer">
+      </template>
+      <div class="dialog-footer group-detail-actions">
+        <button class="primary-button" :disabled="busy" @click="emit('close')">
+          Done
+        </button>
+        <template v-if="group.isLeader && group.status === 'ACTIVE'">
           <button
             class="secondary-button"
             :disabled="busy"
             @click="emit('edit', group)"
           >
-            Edit group</button
-          ><button
-            class="text-button danger"
+            Edit group
+          </button>
+          <button
+            class="text-button danger end-group-action"
             :disabled="busy"
             @click="confirmClose"
           >
-            Close group
+            End group…
           </button>
-        </div>
-      </template>
-      <section
-        v-if="confirmation"
-        ref="confirmationPanel"
-        tabindex="-1"
-        class="confirmation"
-        role="alert"
-      >
-        <h3>{{ confirmation.title }}</h3>
-        <p>{{ confirmation.text }}</p>
-        <div class="form-actions">
-          <button
-            class="secondary-button"
-            :disabled="busy"
-            @click="confirmation = null"
-          >
-            Cancel</button
-          ><button class="danger-button" :disabled="busy" @click="confirm">
-            {{ busy ? "Updating…" : confirmation.button }}
-          </button>
-        </div>
-      </section>
+        </template>
+      </div>
+    </template>
+  </AppDialog>
+  <AppDialog
+    :open="Boolean(confirmation)"
+    :title="confirmation?.title"
+    :busy="busy"
+    close-label="Cancel confirmation"
+    @close="confirmation = null"
+  >
+    <template v-if="confirmation">
+      <p>{{ confirmation.text }}</p>
+      <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+      <div class="dialog-footer">
+        <button
+          class="secondary-button"
+          :disabled="busy"
+          autofocus
+          @click="confirmation = null"
+        >
+          {{ confirmation.endGroup ? "Keep group active" : "Keep member" }}
+        </button>
+        <button class="danger-button" :disabled="busy" @click="confirm">
+          {{ busy ? "Updating…" : confirmation.button }}
+        </button>
+      </div>
     </template>
   </AppDialog>
 </template>

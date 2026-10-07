@@ -2,7 +2,12 @@
 import { nextTick, ref, useId, watch } from "vue";
 import { X } from "lucide-vue-next";
 
-const props = defineProps({ open: Boolean, title: String, busy: Boolean });
+const props = defineProps({
+  open: Boolean,
+  title: String,
+  busy: Boolean,
+  closeLabel: String,
+});
 const emit = defineEmits(["close"]);
 const dialog = ref(null);
 const titleId = useId();
@@ -42,7 +47,7 @@ function close() {
       <button
         type="button"
         class="icon-button"
-        :aria-label="`Close ${title}`"
+        :aria-label="closeLabel || `Close ${title}`"
         :disabled="busy"
         @click="close"
       >

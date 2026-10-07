@@ -33,11 +33,13 @@ export function useGroups() {
           "/api/courses",
         ].map((path) => api(path, { signal: controller.signal })),
       );
-      if (disposed || current !== version) return;
+      if (disposed || current !== version) return false;
       [groups.value, mine.value, requests.value, courses.value] = result;
+      return true;
     } catch (e) {
       if (current === version && !disposed && e.name !== "AbortError")
         error.value = e.message;
+      return false;
     } finally {
       if (current === version && !disposed) loading.value = false;
     }
@@ -52,12 +54,15 @@ export function useGroups() {
       const pending = group.isLeader
         ? await api(`/api/groups/${id}/join-requests`)
         : [];
-      if (disposed || current !== version || detail !== detailVersion) return;
+      if (disposed || current !== version || detail !== detailVersion)
+        return false;
       selected.value = group;
       leaderRequests.value = pending;
+      return true;
     } catch (e) {
       if (current === version && detail === detailVersion && !disposed)
         error.value = e.message;
+      return false;
     } finally {
       if (detail === detailVersion && !disposed) detailLoading.value = false;
     }
@@ -68,20 +73,40 @@ export function useGroups() {
     selected.value = null;
     leaderRequests.value = [];
   }
-  async function mutate(path, method = "POST", body) {
+  async function mutate(
+    path,
+    method = "POST",
+    body,
+    { dismissDetail = false } = {},
+  ) {
     if (busy.value) return false;
     busy.value = true;
     error.value = "";
     const session = token.value;
     const id = selected.value?.groupId;
+    const detail = detailVersion;
     try {
       await api(path, {
         method,
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       if (disposed || token.value !== session) return false;
-      await load();
-      if (id && token.value === session && !disposed) await open(id);
+      if (dismissDetail) closeDetail();
+      let refreshed = await load();
+      if (disposed || token.value !== session) return false;
+      if (refreshed && id && !dismissDetail && detail === detailVersion) {
+        refreshed = await open(id);
+      }
+      if (disposed || token.value !== session) return false;
+      if (!refreshed) {
+        // The write succeeded. Do not leave stale actions available or invite a second save.
+        closeDetail();
+        groups.value = [];
+        mine.value = [];
+        requests.value = [];
+        error.value =
+          "Your change was saved, but the latest groups could not be loaded. Refresh to see the current state.";
+      }
       return true;
     } catch (e) {
       if (!disposed && token.value === session) error.value = e.message;
