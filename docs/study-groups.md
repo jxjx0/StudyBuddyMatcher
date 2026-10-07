@@ -138,10 +138,12 @@ Paths below are relative to the repository root.
 | `backend/group-service/src/test/java/com/studybuddy/group/GroupIntegrationTest.java` | Eleven PostgreSQL/authentication/transaction tests |
 | `backend/group-service/src/test/java/com/studybuddy/group/StudentClientTest.java` | Three HTTP boundary tests |
 | `frontend/src/composables/useGroups.js` | Group state/loading/actions and account isolation |
-| `frontend/src/services/groupApi.js` | Bearer API requests and session failure handling |
+| `frontend/src/services/api.js` | Bearer API requests and session failure handling |
 | `scripts/group-local.py` | Isolated database, tests and local demo runner |
 | `scripts/group-local-students.sql` | Local-only missing student-schema fixture |
 | `scripts/group-smoke.py` | Real gateway route checks |
 | `docs/study-groups.md` | This setup, verification and handover guide |
 
 Existing files changed: group-service's POM/application configuration, StudentClient, StudyGroupController, StudyGroup, GroupJoinRequest, both repositories, StudyGroupService; frontend GroupsPage and the removal of group-only mock state in useAppState; and the root README link to this guide. Existing tracked frontend build output is excluded from the change.
+
+The October UI pass separates the editor and details into `frontend/src/components/groups/GroupEditor.vue` and `GroupDetails.vue`. See [UI review](ui-review.md) for the full screen inventory, added files and browser verification.
