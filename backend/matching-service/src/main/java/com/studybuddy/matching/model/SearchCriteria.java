@@ -1,5 +1,10 @@
 package com.studybuddy.matching.model;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import com.studybuddy.matching.dto.CourseDto;
+
 /**
  * What a student is searching for.
  *
@@ -9,20 +14,19 @@ package com.studybuddy.matching.model;
  */
 public class SearchCriteria {
 
-	private String courseCode;
+	private CourseDto course;
 	private StudyGoal studyGoal;
-	private MeetingMode meetingMode;
-	private int minOverlapMinutes;
+	private Map<String, Object> filters = new HashMap<>();
 
 	public SearchCriteria() {
 	}
 
-	public String getCourseCode() {
-		return courseCode;
+	public CourseDto getCourse() {
+		return course;
 	}
 
-	public void setCourseCode(String courseCode) {
-		this.courseCode = courseCode;
+	public void setCourse(CourseDto course) {
+		this.course = course;
 	}
 
 	public StudyGoal getStudyGoal() {
@@ -33,19 +37,11 @@ public class SearchCriteria {
 		this.studyGoal = studyGoal;
 	}
 
-	public MeetingMode getMeetingMode() {
-		return meetingMode;
+	public Map<String, Object> getFilters() {
+		return filters;
 	}
 
-	public void setMeetingMode(MeetingMode meetingMode) {
-		this.meetingMode = meetingMode;
-	}
-
-	public int getMinOverlapMinutes() {
-		return minOverlapMinutes;
-	}
-
-	public void setMinOverlapMinutes(int minOverlapMinutes) {
-		this.minOverlapMinutes = minOverlapMinutes;
+	public void setFilters(Map<String, Object> filters) {
+		this.filters = filters;
 	}
 }
