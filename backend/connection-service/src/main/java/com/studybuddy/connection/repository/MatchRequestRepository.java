@@ -12,23 +12,30 @@ import java.util.Optional;
 @Repository
 public class MatchRequestRepository {
 
+	private final java.util.Map<String, MatchRequest> storage = new java.util.concurrent.ConcurrentHashMap<>();
+
 	public List<MatchRequest> findAll() {
-		// TODO: implement
-		return List.of();
+		return new java.util.ArrayList<>(storage.values());
 	}
 
 	public Optional<MatchRequest> findById(String requestId) {
-		// TODO: implement
-		return Optional.empty();
+		if (requestId == null) return Optional.empty();
+		return Optional.ofNullable(storage.get(requestId));
 	}
 
 	public List<MatchRequest> findByRecipientId(String recipientId) {
-		// TODO: implement
-		return List.of();
+		if (recipientId == null) return List.of();
+		return storage.values().stream()
+				.filter(req -> recipientId.equals(req.getRecipientId()))
+				.collect(java.util.stream.Collectors.toList());
 	}
 
 	public MatchRequest save(MatchRequest request) {
-		// TODO: implement - generate an id when the request does not have one
+		if (request == null) return null;
+		if (request.getRequestId() == null || request.getRequestId().trim().isEmpty()) {
+			request.setRequestId(java.util.UUID.randomUUID().toString());
+		}
+		storage.put(request.getRequestId(), request);
 		return request;
 	}
 }
