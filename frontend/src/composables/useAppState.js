@@ -156,7 +156,7 @@ function mapStudent(student) {
     initials: initialsOf(student.name),
     color: "coral",
     school: student.school,
-    programme: `${student.programme || student.school} · Year ${student.yearOfStudy}`,
+    programme: `${student.programme || student.school}, Year ${student.yearOfStudy}`,
     course: course ? displayCourse(course) : "",
     courseCodes: [
       ...(student.coursesForStudying || []),

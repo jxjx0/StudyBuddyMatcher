@@ -29,6 +29,6 @@ test("incomplete, reversed and zero-length slots cannot be submitted", () => {
 test("group availability displays full readable day and time labels", () => {
   assert.equal(
     slotText({ day: "WEDNESDAY", startTime: "12:00:00", endTime: "13:30:00" }),
-    "Wednesday · 12:00 PM – 1:30 PM",
+    "Wednesday, 12:00 PM – 1:30 PM",
   );
 });

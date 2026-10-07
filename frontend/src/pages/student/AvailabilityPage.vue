@@ -138,7 +138,7 @@ function removeSlot(index) {
         </div>
         <ul class="member-list">
           <li v-for="(slot, index) in profile.availability" :key="index">
-            <span>{{ slot.day }} · {{ slot.time }}</span>
+            <span>{{ slot.day }}, {{ slot.time }}</span>
             <div class="form-actions">
               <button
                 class="text-button"

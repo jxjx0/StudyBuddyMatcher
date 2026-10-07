@@ -247,7 +247,7 @@ function formatDate(value) {
           </div>
           <p class="hint">
             {{
-              group.studyGoals.map(labelOf).join(" · ") ||
+              group.studyGoals.map(labelOf).join(", ") ||
               "Flexible study goals"
             }}
           </p>

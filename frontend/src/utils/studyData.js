@@ -43,7 +43,7 @@ export function slotProblem(day, startTime, endTime) {
 }
 
 export function slotText(slot) {
-  return `${labelOf(slot.day)} · ${to12h(slot.startTime)} – ${to12h(slot.endTime)}`;
+  return `${labelOf(slot.day)}, ${to12h(slot.startTime)} – ${to12h(slot.endTime)}`;
 }
 
 export const smuSchools = [

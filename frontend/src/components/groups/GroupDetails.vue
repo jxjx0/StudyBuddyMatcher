@@ -102,7 +102,7 @@ function confirm() {
           <dt>Study goals</dt>
           <dd>
             {{
-              group.studyGoals.map(labelOf).join(" · ") ||
+              group.studyGoals.map(labelOf).join(", ") ||
               "Flexible study goals"
             }}
           </dd>

@@ -41,7 +41,7 @@ const {
           </div>
           <div>
             <h2>{{ profile.name || "Your profile" }}</h2>
-            <p>{{ profile.programme }} · {{ profile.year }}</p>
+            <p>{{ profile.programme }}, {{ profile.year }}</p>
           </div>
         </div>
         <h3>About you</h3>
@@ -77,7 +77,7 @@ const {
             </select></label
           >
           <label class="field full"
-            ><span>Contact number <small>Private · optional</small></span
+            ><span>Contact number <small>Private, optional</small></span
             ><input
               v-model="profile.phone"
               type="tel"
@@ -183,7 +183,7 @@ const {
           </p>
           <ul class="simple-list">
             <li v-for="(slot, index) in profile.availability" :key="index">
-              {{ slot.day }} · {{ slot.time }}
+              {{ slot.day }}, {{ slot.time }}
             </li>
           </ul>
           <RouterLink class="secondary-button" to="/student/availability"

@@ -125,7 +125,7 @@ function save() {
           >
         </div>
         <fieldset>
-          <legend>Study goals · optional</legend>
+          <legend>Study goals (optional)</legend>
           <label v-for="goal in studyGoals" :key="goal" class="check-label"
             ><input
               v-model="draft.studyGoals"
@@ -135,7 +135,7 @@ function save() {
           >
         </fieldset>
         <fieldset>
-          <legend>Weekly availability · optional</legend>
+          <legend>Weekly availability (optional)</legend>
           <p v-if="!draft.availability.length" class="hint">
             Leave this empty if your group’s schedule is flexible.
           </p>

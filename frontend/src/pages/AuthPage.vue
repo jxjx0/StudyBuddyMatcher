@@ -17,7 +17,7 @@ const {
 const email = ref("");
 const password = ref("");
 const showPassword = ref(false);
-document.title = "Log in · StudyBuds";
+document.title = "StudyBuds: Log in";
 
 // Only students can sign up; admin accounts are created by an administrator.
 const mode = ref("login");
@@ -42,7 +42,7 @@ function switchMode(next) {
   mode.value = next;
   showPassword.value = false;
   document.title =
-    next === "signup" ? "Create account · StudyBuds" : "Log in · StudyBuds";
+    next === "signup" ? "StudyBuds: Create account" : "StudyBuds: Log in";
   authError.value = "";
   if (next === "signup") loginRole.value = "student";
 }

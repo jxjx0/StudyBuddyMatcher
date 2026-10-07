@@ -27,7 +27,7 @@ watch(
 watch(
   currentLabel,
   (label) => {
-    document.title = `${label} · StudyBuds`;
+    document.title = `StudyBuds: ${label}`;
   },
   { immediate: true },
 );
