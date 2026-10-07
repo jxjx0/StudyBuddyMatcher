@@ -181,7 +181,8 @@ test("the safe confirmation action and Escape both keep the group active", async
   await mountPage();
   await openGroup();
   await click("End group…");
-  expect(topDialog().textContent).toContain("This cannot be undone");
+  expect(topDialog().textContent).toContain("will close permanently");
+  expect(topDialog().textContent).toContain("Pending requests will be rejected");
   await click("Keep group active", topDialog());
   await click("End group…");
   topDialog().dispatchEvent(new Event("cancel", { cancelable: true }));
@@ -203,7 +204,9 @@ test("ending dismisses both dialogs and shows Closed; reopening has no edit or e
   );
   expect(button("Closed (1)").getAttribute("aria-pressed")).toBe("true");
   await openGroup();
-  expect(topDialog().textContent).toContain("This group has ended");
+  expect(topDialog().textContent).toContain(
+    "Closed groups cannot be edited or reopened",
+  );
   expect(topDialog().textContent).not.toContain("End group…");
   expect(topDialog().textContent).not.toContain("Edit group");
 });
@@ -278,7 +281,7 @@ test("a sent request displays feedback inside the dialog and prevents another re
   expect(topDialog().querySelector('[role="status"]').textContent).toBe(
     "Join request sent",
   );
-  expect(topDialog().textContent).toContain("awaiting the leader’s decision");
+  expect(topDialog().textContent).toContain("Request pending");
   expect(topDialog().textContent).not.toContain("Request to join");
 });
 

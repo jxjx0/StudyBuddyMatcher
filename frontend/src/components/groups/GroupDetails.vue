@@ -36,10 +36,10 @@ const joiningMessage = computed(() => {
   const group = props.group;
   if (!group) return "";
   if (group.myRequestStatus === "PENDING")
-    return "Your join request is awaiting the leader’s decision.";
+    return "Request pending.";
   if (group.status === "CLOSED") return "This group is closed.";
   if (!group.leaderAvailable)
-    return "The leader is unavailable. New requests are paused.";
+    return "Requests paused: leader unavailable.";
   if (group.memberCount >= group.maxGroupSize) return "This group is full.";
   return "Joining is unavailable.";
 });
@@ -63,7 +63,6 @@ function decide(request, decision) {
 function confirmRemove(member) {
   confirmation.value = {
     title: `Remove ${member.name}?`,
-    text: "They will no longer be a member of this group.",
     path: `/api/groups/${props.group.groupId}/members/${member.studentId}`,
     method: "DELETE",
     message: "Member removed",
@@ -73,10 +72,10 @@ function confirmRemove(member) {
 function confirmClose() {
   confirmation.value = {
     title: "End this study group?",
-    text: `“${props.group.groupName}” will be closed to new members. All pending requests will be rejected. This cannot be undone.`,
+    text: `“${props.group.groupName}” will close permanently. Pending requests will be rejected.`,
     path: `/api/groups/${props.group.groupId}/close`,
     method: "POST",
-    message: `“${props.group.groupName}” is now closed. You can find it under My groups → Closed.`,
+    message: `“${props.group.groupName}” is now closed.`,
     button: "End group permanently",
     endGroup: true,
   };
@@ -105,30 +104,27 @@ function confirm() {
         {{ notice }}
       </p>
       <p v-if="group.status === 'CLOSED'" class="feature-note">
-        This group has ended. Its details and request history are kept here for
-        reference. You cannot edit it, add members or reopen it.
+        Closed groups cannot be edited or reopened.
       </p>
       <div class="chip-list">
         <span class="tag">{{ group.courseCode }}</span
         ><span class="tag">{{ labelOf(group.status) }}</span
         ><span class="tag">{{ labelOf(group.meetingMode) }}</span>
       </div>
-      <p class="preserve-lines">
-        {{ group.description || "No description added." }}
+      <p v-if="group.description" class="preserve-lines">
+        {{ group.description }}
       </p>
       <dl class="detail-grid">
         <div>
           <dt>Members</dt>
           <dd>
-            {{ group.memberCount }} of {{ group.maxGroupSize }} places filled
+            {{ group.memberCount }} / {{ group.maxGroupSize }}
           </dd>
         </div>
         <div>
           <dt>Study goals</dt>
           <dd>
-            {{
-              group.studyGoals.map(labelOf).join(", ") || "Flexible study goals"
-            }}
+            {{ group.studyGoals.map(labelOf).join(", ") || "Any" }}
           </dd>
         </div>
         <div class="full">
@@ -136,7 +132,7 @@ function confirm() {
           <dd v-for="(slot, index) in group.availability" :key="index">
             {{ slotText(slot) }}
           </dd>
-          <dd v-if="!group.availability.length">Flexible schedule</dd>
+          <dd v-if="!group.availability.length">Flexible</dd>
         </div>
       </dl>
       <p v-if="error" class="error-message" role="alert">{{ error }}</p>
@@ -183,13 +179,6 @@ function confirm() {
       <template v-if="group.isLeader"
         ><section class="form-section">
           <h3>Pending requests ({{ pendingRequests.length }})</h3>
-          <p v-if="!pendingRequests.length" class="hint">
-            {{
-              group.status === "CLOSED"
-                ? "This group is no longer accepting requests."
-                : "You're all caught up. New requests will appear here."
-            }}
-          </p>
           <div
             v-for="request in pendingRequests"
             :key="request.groupJoinRequestId"
@@ -228,7 +217,7 @@ function confirm() {
             "
             class="hint"
           >
-            The group is full. Increase its size before accepting more members.
+            Increase its size to accept more members.
           </p>
           <details v-if="requestHistory.length" class="request-history">
             <summary>Request history ({{ requestHistory.length }})</summary>
@@ -241,8 +230,7 @@ function confirm() {
                 <strong>{{ request.studentName }}</strong>
                 <p>Requested {{ requestTime(request.createdAt) }}</p>
                 <p v-if="request.respondedAt">
-                  {{ labelOf(request.status) }}
-                  {{ requestTime(request.respondedAt) }}
+                  Responded {{ requestTime(request.respondedAt) }}
                 </p>
               </div>
               <span class="tag">{{ labelOf(request.status) }}</span>
@@ -281,7 +269,7 @@ function confirm() {
     @close="confirmation = null"
   >
     <template v-if="confirmation">
-      <p>{{ confirmation.text }}</p>
+      <p v-if="confirmation.text">{{ confirmation.text }}</p>
       <p v-if="error" class="error-message" role="alert">{{ error }}</p>
       <div class="dialog-footer">
         <button

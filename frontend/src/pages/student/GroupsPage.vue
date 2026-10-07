@@ -46,13 +46,6 @@ const requestEmptyTitle = computed(() => {
   if (requestStatus.value === "PENDING") return "No pending requests";
   return "No past decisions yet";
 });
-const requestEmptyHelp = computed(() => {
-  if (requestStatus.value === "HISTORY")
-    return "Accepted and rejected requests will appear here.";
-  if (!requests.value.length)
-    return "Browse groups and request to join one that fits your studies.";
-  return "Browse groups to send a request. Past decisions are kept in History.";
-});
 const tab = ref("browse");
 const query = ref("");
 const course = ref("");
@@ -112,15 +105,6 @@ const emptyTitle = computed(() => {
     ? "No active groups yet"
     : "No closed groups yet";
 });
-const emptyHelp = computed(() => {
-  if (hasFilters.value)
-    return "Try a different search or reset your filters to see more groups.";
-  if (tab.value === "browse")
-    return "Be the first to create a group for your course.";
-  if (groupStatus.value === "CLOSED")
-    return "Groups you have ended or belonged to will appear here when they close.";
-  return "Browse groups to find one to join, or create a group for your course.";
-});
 function browseGroups() {
   tab.value = "browse";
   resetFilters();
@@ -140,8 +124,8 @@ function statusLabel(group) {
   return "Open to join";
 }
 function membershipLabel(group) {
-  if (group.isLeader) return "You lead this group";
-  if (group.isMember) return "You’re a member";
+  if (group.isLeader) return "Leader";
+  if (group.isMember) return "Member";
   if (group.myRequestStatus === "PENDING") return "Request pending";
   return "";
 }
@@ -159,9 +143,7 @@ async function save(draft) {
     tab.value = "mine";
     groupStatus.value = "ACTIVE";
     resetFilters();
-    notice.value = id
-      ? "Group updated."
-      : "Group created. Other students can now request to join.";
+    notice.value = id ? "Group updated." : "Group created.";
   }
 }
 async function action({ path, message, method, endGroup }) {
@@ -185,7 +167,6 @@ function viewGroup(id) {
     <header class="page-heading heading-with-action">
       <div>
         <h1>Study groups</h1>
-        <p>Find your course, share your goals and learn together.</p>
       </div>
       <button
         class="primary-button"
@@ -245,10 +226,6 @@ function viewGroup(id) {
           }})
         </button>
       </div>
-      <p v-if="tab === 'mine' && groupStatus === 'CLOSED'" class="hint">
-        Closed groups are kept for reference. Create a new group to study
-        together again.
-      </p>
       <div class="filter-surface">
         <div class="group-search">
           <label class="search-box"
@@ -308,10 +285,6 @@ function viewGroup(id) {
             ><span>Maximum group size</span
             ><input v-model="size" type="number" min="2" placeholder="Any size"
           /></label>
-          <p class="hint full">
-            Flexible schedules match any day. Groups meeting in either mode
-            match online and in-person filters.
-          </p>
         </div>
       </div>
       <div class="results-heading">
@@ -337,8 +310,8 @@ function viewGroup(id) {
             ><span class="hint">{{ group.courseCode }}</span>
           </div>
           <h2>{{ group.groupName }}</h2>
-          <p class="group-description">
-            {{ group.description || "Study together at your own pace." }}
+          <p v-if="group.description" class="group-description">
+            {{ group.description }}
           </p>
           <div class="group-meta">
             <span
@@ -346,10 +319,8 @@ function viewGroup(id) {
               {{ group.maxGroupSize }} members</span
             ><span>{{ labelOf(group.meetingMode) }}</span>
           </div>
-          <p class="hint">
-            {{
-              group.studyGoals.map(labelOf).join(", ") || "Flexible study goals"
-            }}
+          <p v-if="group.studyGoals.length" class="hint">
+            {{ group.studyGoals.map(labelOf).join(", ") }}
           </p>
           <footer>
             <button
@@ -359,14 +330,15 @@ function viewGroup(id) {
               @click="viewGroup(group.groupId)"
             >
               View group</button
-            ><span class="hint">{{ membershipLabel(group) }}</span>
+            ><span v-if="membershipLabel(group)" class="hint">{{
+              membershipLabel(group)
+            }}</span>
           </footer>
         </article>
       </div>
       <div v-else-if="!error" class="empty-state">
         <Users :size="32" />
         <h2>{{ emptyTitle }}</h2>
-        <p>{{ emptyHelp }}</p>
         <div class="form-actions">
           <button
             class="primary-button"
@@ -414,7 +386,6 @@ function viewGroup(id) {
       </div>
       <div v-if="!visibleRequests.length && !error" class="empty-state">
         <h2>{{ requestEmptyTitle }}</h2>
-        <p>{{ requestEmptyHelp }}</p>
         <button class="primary-button" @click="browseGroups">
           Browse groups
         </button>
@@ -431,7 +402,7 @@ function viewGroup(id) {
           </p>
           <p>Requested {{ requestTime(request.createdAt) }}</p>
           <p v-if="request.respondedAt">
-            {{ labelOf(request.status) }} {{ requestTime(request.respondedAt) }}
+            Responded {{ requestTime(request.respondedAt) }}
           </p>
         </div>
         <button

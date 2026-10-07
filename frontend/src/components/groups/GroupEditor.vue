@@ -168,9 +168,7 @@ function save() {
               >
                 {{ course.courseCode }} {{ course.courseName }}
               </option></select
-            ><small v-if="group"
-              >The course is fixed after a group is created.</small
-            ></label
+            ><small v-if="group">Cannot be changed.</small></label
           ><label class="field"
             ><span>Maximum members</span
             ><input
@@ -179,7 +177,7 @@ function save() {
               :min="Math.max(2, group?.memberCount || 2)"
               step="1"
               required
-            /><small>Includes you as the group leader.</small></label
+            /></label
           ><label class="field"
             ><span>Meeting mode</span
             ><select v-model="draft.meetingMode">
@@ -201,9 +199,6 @@ function save() {
         </fieldset>
         <fieldset>
           <legend>Weekly availability (optional)</legend>
-          <p v-if="!draft.availability.length" class="hint">
-            Leave this empty if your group’s schedule is flexible.
-          </p>
           <div
             v-for="(slot, index) in draft.availability"
             :key="index"
@@ -268,7 +263,7 @@ function save() {
     close-label="Keep editing"
     @close="keepEditing"
   >
-    <p>Your changes have not been saved. Keep editing to finish your group.</p>
+    <p>Unsaved changes will be lost.</p>
     <div class="dialog-footer">
       <button class="secondary-button" autofocus @click="keepEditing">
         Keep editing
