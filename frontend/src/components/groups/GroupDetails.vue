@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
 import AppDialog from "../AppDialog.vue";
-import { labelOf, slotText } from "../../utils/studyData";
+import { labelOf, requestTime, slotText } from "../../utils/studyData";
 const props = defineProps({
   group: Object,
   requests: Array,
@@ -11,6 +11,12 @@ const props = defineProps({
 });
 const emit = defineEmits(["close", "edit", "action"]);
 const confirmation = ref(null);
+const pendingRequests = computed(() =>
+  props.requests.filter((request) => request.status === "PENDING"),
+);
+const requestHistory = computed(() =>
+  props.requests.filter((request) => request.status !== "PENDING"),
+);
 const noticePanel = ref(null);
 watch(
   () => props.notice,
@@ -176,22 +182,22 @@ function confirm() {
       </section>
       <template v-if="group.isLeader"
         ><section class="form-section">
-          <h3>Join requests</h3>
-          <p v-if="!requests.length" class="hint">
+          <h3>Pending requests ({{ pendingRequests.length }})</h3>
+          <p v-if="!pendingRequests.length" class="hint">
             {{
               group.status === "CLOSED"
-                ? "This group ended without any join requests."
-                : "No requests yet. New requests will appear here."
+                ? "This group is no longer accepting requests."
+                : "You're all caught up. New requests will appear here."
             }}
           </p>
           <div
-            v-for="request in requests"
+            v-for="request in pendingRequests"
             :key="request.groupJoinRequestId"
             class="request-row"
           >
             <div>
               <strong>{{ request.studentName }}</strong>
-              <p>{{ labelOf(request.status) }}</p>
+              <p>Requested {{ requestTime(request.createdAt) }}</p>
             </div>
             <div
               v-if="request.status === 'PENDING' && group.status === 'ACTIVE'"
@@ -217,12 +223,31 @@ function confirm() {
           <p
             v-if="
               group.memberCount >= group.maxGroupSize &&
-              group.status === 'ACTIVE'
+              group.status === 'ACTIVE' &&
+              pendingRequests.length
             "
             class="hint"
           >
             The group is full. Increase its size before accepting more members.
           </p>
+          <details v-if="requestHistory.length" class="request-history">
+            <summary>Request history ({{ requestHistory.length }})</summary>
+            <div
+              v-for="request in requestHistory"
+              :key="request.groupJoinRequestId"
+              class="request-row"
+            >
+              <div>
+                <strong>{{ request.studentName }}</strong>
+                <p>Requested {{ requestTime(request.createdAt) }}</p>
+                <p v-if="request.respondedAt">
+                  {{ labelOf(request.status) }}
+                  {{ requestTime(request.respondedAt) }}
+                </p>
+              </div>
+              <span class="tag">{{ labelOf(request.status) }}</span>
+            </div>
+          </details>
         </section>
       </template>
       <div class="dialog-footer group-detail-actions">

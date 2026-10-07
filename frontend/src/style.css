@@ -849,6 +849,14 @@ dd {
   font-size: 1.1rem;
   margin: 0;
 }
+.request-history {
+  margin-top: 24px;
+}
+.request-history summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 12px 0;
+}
 .preserve-lines {
   white-space: pre-line;
   margin-top: 16px;

@@ -9,6 +9,7 @@ import {
   meetingModes,
   weekDays,
   labelOf,
+  requestTime,
 } from "../../utils/studyData";
 const {
   groups,
@@ -28,6 +29,30 @@ const {
 } = useGroups();
 const notice = ref("");
 const groupStatus = ref("ACTIVE");
+const requestStatus = ref("PENDING");
+const pendingRequests = computed(() =>
+  requests.value.filter((request) => request.status === "PENDING"),
+);
+const requestHistory = computed(() =>
+  requests.value.filter((request) => request.status !== "PENDING"),
+);
+const visibleRequests = computed(() =>
+  requestStatus.value === "PENDING"
+    ? pendingRequests.value
+    : requestHistory.value,
+);
+const requestEmptyTitle = computed(() => {
+  if (!requests.value.length) return "No join requests yet";
+  if (requestStatus.value === "PENDING") return "No pending requests";
+  return "No past decisions yet";
+});
+const requestEmptyHelp = computed(() => {
+  if (requestStatus.value === "HISTORY")
+    return "Accepted and rejected requests will appear here.";
+  if (!requests.value.length)
+    return "Browse groups and request to join one that fits your studies.";
+  return "Browse groups to send a request. Past decisions are kept in History.";
+});
 const tab = ref("browse");
 const query = ref("");
 const course = ref("");
@@ -70,6 +95,36 @@ const visible = computed(() => {
     return true;
   });
 });
+const hasFilters = computed(() =>
+  Boolean(
+    query.value.trim() ||
+    course.value ||
+    goal.value ||
+    mode.value ||
+    day.value ||
+    size.value,
+  ),
+);
+const emptyTitle = computed(() => {
+  if (hasFilters.value) return "No groups match your filters";
+  if (tab.value === "browse") return "No open groups yet";
+  return groupStatus.value === "ACTIVE"
+    ? "No active groups yet"
+    : "No closed groups yet";
+});
+const emptyHelp = computed(() => {
+  if (hasFilters.value)
+    return "Try a different search or reset your filters to see more groups.";
+  if (tab.value === "browse")
+    return "Be the first to create a group for your course.";
+  if (groupStatus.value === "CLOSED")
+    return "Groups you have ended or belonged to will appear here when they close.";
+  return "Browse groups to find one to join, or create a group for your course.";
+});
+function browseGroups() {
+  tab.value = "browse";
+  resetFilters();
+}
 function resetFilters() {
   query.value = "";
   course.value = "";
@@ -123,13 +178,6 @@ async function action({ path, message, method, endGroup }) {
 function viewGroup(id) {
   notice.value = "";
   open(id);
-}
-function formatDate(value) {
-  return new Date(value).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 </script>
 <template>
@@ -271,7 +319,9 @@ function formatDate(value) {
           {{ visible.length }}
           {{ visible.length === 1 ? "group" : "groups" }} found
         </p>
-        <button class="text-button" @click="resetFilters">Reset filters</button>
+        <button v-if="hasFilters" class="text-button" @click="resetFilters">
+          Reset filters
+        </button>
       </div>
       <div v-if="visible.length" class="group-cards">
         <article
@@ -315,11 +365,8 @@ function formatDate(value) {
       </div>
       <div v-else-if="!error" class="empty-state">
         <Users :size="32" />
-        <h2>{{ tab === "mine" ? "No matching groups" : "No groups found" }}</h2>
-        <p>
-          Try a different search or reset your filters. You can also create a
-          group for your course.
-        </p>
+        <h2>{{ emptyTitle }}</h2>
+        <p>{{ emptyHelp }}</p>
         <div class="form-actions">
           <button
             class="primary-button"
@@ -328,50 +375,75 @@ function formatDate(value) {
           >
             Create group
           </button>
-          <button class="secondary-button" @click="resetFilters">
+          <button
+            v-if="hasFilters"
+            class="secondary-button"
+            @click="resetFilters"
+          >
             Reset filters</button
           ><button
             v-if="tab === 'mine'"
             class="secondary-button"
-            @click="
-              tab = 'browse';
-              resetFilters();
-            "
+            @click="browseGroups"
           >
             Browse groups
           </button>
         </div>
       </div>
     </template>
-    <template v-else-if="!loading && tab === 'requests'"
-      ><div v-if="!requests.length && !error" class="empty-state">
-        <h2>No join requests yet</h2>
-        <p>Browse groups and request to join one that fits your studies.</p>
-        <button class="primary-button" @click="tab = 'browse'">
+    <template v-else-if="!loading && tab === 'requests'">
+      <div
+        v-if="requests.length"
+        class="group-status-controls"
+        aria-label="Request status"
+      >
+        <button
+          class="secondary-button"
+          :aria-pressed="requestStatus === 'PENDING'"
+          @click="requestStatus = 'PENDING'"
+        >
+          Pending ({{ pendingRequests.length }})
+        </button>
+        <button
+          class="secondary-button"
+          :aria-pressed="requestStatus === 'HISTORY'"
+          @click="requestStatus = 'HISTORY'"
+        >
+          History ({{ requestHistory.length }})
+        </button>
+      </div>
+      <div v-if="!visibleRequests.length && !error" class="empty-state">
+        <h2>{{ requestEmptyTitle }}</h2>
+        <p>{{ requestEmptyHelp }}</p>
+        <button class="primary-button" @click="browseGroups">
           Browse groups
         </button>
       </div>
       <article
-        v-for="request in requests"
+        v-for="request in visibleRequests"
         :key="request.groupJoinRequestId"
         class="request-row"
       >
         <div>
           <h2>{{ request.groupName }}</h2>
           <p>
-            <span class="tag">{{ labelOf(request.status) }}</span> Requested
-            {{ formatDate(request.createdAt) }}
+            <span class="tag">{{ labelOf(request.status) }}</span>
+          </p>
+          <p>Requested {{ requestTime(request.createdAt) }}</p>
+          <p v-if="request.respondedAt">
+            {{ labelOf(request.status) }} {{ requestTime(request.respondedAt) }}
           </p>
         </div>
         <button
           class="secondary-button"
           :disabled="busy"
+          :aria-label="`View ${request.groupName}`"
           @click="viewGroup(request.groupId)"
         >
           View group
         </button>
-      </article></template
-    >
+      </article>
+    </template>
     <GroupDetails
       :group="selected"
       :notice="notice"

@@ -1,6 +1,8 @@
 <script setup>
-import { nextTick, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
 import AppDialog from "../AppDialog.vue";
+import { token } from "../../composables/useAuth";
 import {
   studyGoals,
   meetingModes,
@@ -21,6 +23,42 @@ const draft = reactive({});
 const originalDraft = ref("");
 const discardOpen = ref(false);
 const errorMessage = ref(null);
+const hasUnsavedChanges = computed(
+  () =>
+    props.open &&
+    Boolean(token.value) &&
+    JSON.stringify(draft) !== originalDraft.value,
+);
+let resolveNavigation = null;
+
+function finishNavigation(allow) {
+  if (!resolveNavigation) return;
+  resolveNavigation(allow);
+  resolveNavigation = null;
+}
+function warnBeforeUnload(event) {
+  event.preventDefault();
+  event.returnValue = true;
+}
+watch(hasUnsavedChanges, (dirty) => {
+  if (dirty) window.addEventListener("beforeunload", warnBeforeUnload);
+  else window.removeEventListener("beforeunload", warnBeforeUnload);
+});
+onBeforeRouteLeave(() => {
+  // Session expiry must still be able to return the user to sign-in.
+  if (!token.value) return true;
+  if (props.open && props.busy) return false;
+  if (!hasUnsavedChanges.value) return true;
+  finishNavigation(false);
+  discardOpen.value = true;
+  return new Promise((resolve) => {
+    resolveNavigation = resolve;
+  });
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("beforeunload", warnBeforeUnload);
+  finishNavigation(false);
+});
 watch(
   () => props.open,
   (open) => {
@@ -53,7 +91,7 @@ function removeSlot(index) {
 }
 function requestClose() {
   if (props.busy) return;
-  if (JSON.stringify(draft) !== originalDraft.value) {
+  if (hasUnsavedChanges.value) {
     discardOpen.value = true;
     return;
   }
@@ -62,6 +100,11 @@ function requestClose() {
 function discard() {
   discardOpen.value = false;
   emit("close");
+  finishNavigation(true);
+}
+function keepEditing() {
+  discardOpen.value = false;
+  finishNavigation(false);
 }
 async function showProblem(message) {
   validationError.value = message;
@@ -223,11 +266,11 @@ function save() {
     :open="discardOpen"
     title="Discard your changes?"
     close-label="Keep editing"
-    @close="discardOpen = false"
+    @close="keepEditing"
   >
     <p>Your changes have not been saved. Keep editing to finish your group.</p>
     <div class="dialog-footer">
-      <button class="secondary-button" autofocus @click="discardOpen = false">
+      <button class="secondary-button" autofocus @click="keepEditing">
         Keep editing
       </button>
       <button class="danger-button" @click="discard">Discard changes</button>

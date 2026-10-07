@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { to12h, to24h, slotProblem, slotText } from "../src/utils/studyData.js";
+import {
+  to12h,
+  to24h,
+  slotProblem,
+  slotText,
+  requestTime,
+} from "../src/utils/studyData.js";
 
 test("midnight, noon and evening availability survive display/storage conversion", () => {
   for (const time of [
@@ -31,4 +37,18 @@ test("group availability displays full readable day and time labels", () => {
     slotText({ day: "WEDNESDAY", startTime: "12:00:00", endTime: "13:30:00" }),
     "Wednesday, 12:00 PM – 1:30 PM",
   );
+});
+
+test("request times distinguish multiple applications on the same day", () => {
+  const first = requestTime("2026-10-08T10:00:00Z");
+  const later = requestTime("2026-10-08T10:30:00Z");
+  assert.notEqual(first, later);
+  assert.match(first, /2026/);
+  assert.ok(!first.includes("Invalid Date"));
+});
+
+test("missing request timestamps have a readable fallback", () => {
+  for (const value of [null, undefined, "", "invalid"]) {
+    assert.equal(requestTime(value), "Time unavailable");
+  }
 });

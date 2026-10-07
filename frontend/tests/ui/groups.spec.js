@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { createApp, nextTick } from "vue";
+import { createApp, h, nextTick } from "vue";
+import { createMemoryHistory, createRouter, RouterView } from "vue-router";
 import GroupsPage from "../../src/pages/student/GroupsPage.vue";
 import { api } from "../../src/services/api";
 import { token } from "../../src/composables/useAuth";
@@ -11,8 +12,10 @@ vi.mock("../../src/composables/useAuth", async () => {
 });
 
 let app;
+let router;
 let group;
 let joinRequests;
+let ownRequests;
 let failRefresh;
 let failWrite;
 let failDetail;
@@ -78,7 +81,8 @@ async function fakeApi(path, options = {}) {
     return group.status === "ACTIVE" ? [structuredClone(group)] : [];
   if (path === "/api/groups?scope=mine")
     return group.isMember ? [structuredClone(group)] : [];
-  if (path === "/api/groups/join-requests/mine") return [];
+  if (path === "/api/groups/join-requests/mine")
+    return structuredClone(ownRequests);
   if (path === "/api/courses")
     return [{ courseCode: "IS442", courseName: "Object Oriented Programming" }];
   if (path === "/api/groups/group-1/join-requests")
@@ -121,7 +125,17 @@ function writes() {
   return api.mock.calls.filter(([, options]) => options?.method);
 }
 async function mountPage() {
-  app = createApp(GroupsPage);
+  router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/groups", component: GroupsPage },
+      { path: "/away", component: { render: () => h("p", "Another page") } },
+    ],
+  });
+  await router.push("/groups");
+  await router.isReady();
+  app = createApp({ render: () => h(RouterView) });
+  app.use(router);
   app.mount(document.querySelector("#main-content"));
   await settle();
 }
@@ -136,8 +150,10 @@ beforeEach(() => {
       groupJoinRequestId: "request-1",
       studentName: "Carol",
       status: "PENDING",
+      createdAt: "2026-10-08T10:00:00Z",
     },
   ];
+  ownRequests = [];
   failRefresh = false;
   failWrite = false;
   failDetail = false;
@@ -406,4 +422,165 @@ test("changing sessions during a write cannot reopen an old group or show succes
   await settle();
   expect(topDialog()).toBeUndefined();
   expect(document.body.textContent).not.toContain("is now closed");
+});
+
+test("leaders see pending work separately from completed request history", async () => {
+  joinRequests.unshift({
+    groupJoinRequestId: "old-request",
+    studentName: "Previous applicant",
+    status: "REJECTED",
+    createdAt: "2026-10-07T10:00:00Z",
+    respondedAt: "2026-10-07T11:00:00Z",
+  });
+  await mountPage();
+  await openGroup();
+  const dialog = topDialog();
+  expect(dialog.textContent).toContain("Pending requests (1)");
+  const history = dialog.querySelector("details");
+  expect(history.open).toBe(false);
+  expect(history.textContent).toContain("Previous applicant");
+  expect(history.textContent).not.toContain("Carol");
+  expect(history.querySelectorAll("button")).toHaveLength(0);
+  expect(button("Accept Carol's request", dialog)).toBeDefined();
+  history.querySelector("summary").click();
+  expect(history.open).toBe(true);
+  expect(history.textContent).toContain("Requested");
+  expect(history.textContent).not.toContain("Time unavailable");
+});
+
+test("My requests separates pending applications from dated past decisions", async () => {
+  const request = { groupId: "group-1", createdAt: "2026-10-08T10:00:00Z" };
+  ownRequests = [
+    {
+      ...request,
+      groupJoinRequestId: "past",
+      groupName: "Past group",
+      status: "ACCEPTED",
+      respondedAt: "2026-10-08T11:00:00Z",
+    },
+    {
+      ...request,
+      groupJoinRequestId: "pending",
+      groupName: "Pending group",
+      status: "PENDING",
+    },
+  ];
+  await mountPage();
+  await click("My requests");
+  expect(document.querySelector("article").textContent).toContain(
+    "Pending group",
+  );
+  expect(document.querySelectorAll("article")).toHaveLength(1);
+  await click("History (1)");
+  expect(document.querySelector("article").textContent).toContain("Past group");
+  expect(document.querySelector("article").textContent).not.toContain(
+    "Pending group",
+  );
+  expect(button("View Past group")).toBeDefined();
+});
+
+test("an empty Active view explains its state without offering a useless filter reset", async () => {
+  group.status = "CLOSED";
+  await mountPage();
+  await click("My groups");
+  expect(document.querySelector(".empty-state h2").textContent).toBe(
+    "No active groups yet",
+  );
+  expect(document.querySelector(".empty-state").textContent).not.toContain(
+    "Reset filters",
+  );
+  await click("Closed (1)");
+  expect(button("View Java study circle")).toBeDefined();
+});
+
+test("filtered empty results offer a reset that restores the visible group", async () => {
+  await mountPage();
+  const search = document.querySelector('input[type="search"]');
+  search.value = "unmatched";
+  search.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
+  expect(document.querySelector(".empty-state h2").textContent).toBe(
+    "No groups match your filters",
+  );
+  await click("Reset filters", document.querySelector(".empty-state"));
+  expect(button("View Java study circle")).toBeDefined();
+});
+
+test("Browse from empty My requests clears the previous group filters", async () => {
+  await mountPage();
+  const search = document.querySelector('input[type="search"]');
+  search.value = "unmatched";
+  search.dispatchEvent(new Event("input", { bubbles: true }));
+  await click("My requests");
+  await click("Browse groups", document.querySelector(".empty-state"));
+  expect(button("View Java study circle")).toBeDefined();
+});
+
+test("route navigation keeps a dirty draft until the user explicitly discards it", async () => {
+  await mountPage();
+  await click("Create group");
+  await fill('input[maxlength="100"]', "Draft protected from navigation");
+  const firstNavigation = router.push("/away");
+  await settle();
+  expect(topDialog().textContent).toContain("Discard your changes?");
+  await click("Keep editing", topDialog());
+  await firstNavigation;
+  expect(router.currentRoute.value.path).toBe("/groups");
+  expect(topDialog().querySelector('input[maxlength="100"]').value).toBe(
+    "Draft protected from navigation",
+  );
+  const secondNavigation = router.push("/away");
+  await settle();
+  await click("Discard changes", topDialog());
+  await secondNavigation;
+  expect(router.currentRoute.value.path).toBe("/away");
+  expect(document.querySelectorAll("dialog[open]")).toHaveLength(0);
+  expect(writes()).toHaveLength(0);
+});
+
+function unloadIsBlocked() {
+  const event = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
+test("reload protection exists only while an unsaved draft is open", async () => {
+  await mountPage();
+  expect(unloadIsBlocked()).toBe(false);
+  await click("Create group");
+  expect(unloadIsBlocked()).toBe(false);
+  await fill('input[maxlength="100"]', "Unsaved changes");
+  expect(unloadIsBlocked()).toBe(true);
+  await click("Save group", topDialog());
+  expect(unloadIsBlocked()).toBe(false);
+  await router.push("/away");
+  expect(router.currentRoute.value.path).toBe("/away");
+});
+
+test("an expired session can leave a dirty editor without being trapped by the guard", async () => {
+  await mountPage();
+  await click("Create group");
+  await fill('input[maxlength="100"]', "Unsaved changes");
+  token.value = "";
+  await settle();
+  expect(unloadIsBlocked()).toBe(false);
+  await router.push("/away");
+  expect(router.currentRoute.value.path).toBe("/away");
+});
+
+test("leaving during a save is blocked until that save completes", async () => {
+  let finish;
+  pendingWrite = new Promise((resolve) => {
+    finish = resolve;
+  });
+  await mountPage();
+  await click("Create group");
+  await fill('input[maxlength="100"]', "Saving draft");
+  await click("Save group", topDialog());
+  await router.push("/away");
+  expect(router.currentRoute.value.path).toBe("/groups");
+  finish();
+  await settle();
+  await router.push("/away");
+  expect(router.currentRoute.value.path).toBe("/away");
 });
