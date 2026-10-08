@@ -33,5 +33,4 @@ public class User {
 	public void setAccountStatus(AccountStatus accountStatus) {
 		this.accountStatus = Objects.requireNonNull(accountStatus, "accountStatus is required");
 	}
-	public void changeAccountStatus(AccountStatus status) { setAccountStatus(status); }
 }
