@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * Fetches student details from user-service.
  *
@@ -17,10 +19,17 @@ import org.springframework.web.client.RestClient;
 public class StudentClient {
 
 	private final RestClient restClient;
+	private final String contactServiceSecret;
 
 	public StudentClient(RestClient.Builder builder,
-						 @Value("${services.user-service-url}") String userServiceUrl) {
+						 @Value("${services.user-service-url}") String userServiceUrl,
+						 @Value("${services.contact-service-secret:}") String contactServiceSecret) {
+		if (contactServiceSecret == null
+				|| contactServiceSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+			throw new IllegalStateException("CONTACT_SERVICE_SECRET must contain at least 32 characters");
+		}
 		this.restClient = builder.baseUrl(userServiceUrl).build();
+		this.contactServiceSecret = contactServiceSecret;
 	}
 
 	/**
@@ -34,13 +43,12 @@ public class StudentClient {
 	}
 
 	/**
-	 * Contact details, for use once a match request has been accepted.
-	 *
-	 * TODO: only call this after checking the two students are connected.
+	 * Contact details are fetched only after connection-service verifies an active connection.
 	 */
 	public StudentContactDto findContactDetails(String userId) {
 		return restClient.get()
-				.uri("/api/students/{userId}/contact", userId)
+				.uri("/api/students/internal/{userId}/contact", userId)
+				.header("X-Contact-Service-Secret", contactServiceSecret)
 				.retrieve()
 				.body(StudentContactDto.class);
 	}

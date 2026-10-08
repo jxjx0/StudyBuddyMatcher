@@ -1,18 +1,24 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, onScopeDispose, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ChevronRight, LogOut, Menu, Sparkles } from "lucide-vue-next";
 import { useAppState } from "../composables/useAppState";
+import { useConnections } from "../composables/useConnections";
 import AppNavigation from "../components/AppNavigation.vue";
 import AppDialog from "../components/AppDialog.vue";
 
 const { userRole, nav, user, signOut, initialsOf } = useAppState();
+const {
+  loadConnectionsAndRequests,
+  checkForConnectionUpdates,
+  markConnectionUpdatesRead,
+} = useConnections();
 const route = useRoute();
 const menuOpen = ref(false);
 const displayName = computed(() => user.value?.name || "StudyBuds member");
 const currentLabel = computed(() => {
-  if (route.path === "/student/availability") return "Weekly availability";
-  if (route.path === "/student/public-profile") return "Public profile";
+  if (route.path === "/student/availability") return "Weekly Availability";
+  if (route.path === "/student/public-profile") return "Public Profile";
   return (
     nav.value.find((item) => route.path === "/" + item.path)?.label ||
     "StudyBuds"
@@ -22,6 +28,7 @@ watch(
   () => route.path,
   () => {
     menuOpen.value = false;
+    void refreshConnectionUpdates();
   },
 );
 watch(
@@ -31,6 +38,32 @@ watch(
   },
   { immediate: true },
 );
+
+let updateTimer;
+let checkingUpdates = false;
+async function refreshConnectionUpdates() {
+  if (userRole.value !== "student" || checkingUpdates) return;
+  checkingUpdates = true;
+  try {
+    if (route.path === "/student/connections") {
+      if (await loadConnectionsAndRequests({ silent: true }))
+        markConnectionUpdatesRead();
+    } else {
+      await checkForConnectionUpdates();
+    }
+  } finally {
+    checkingUpdates = false;
+  }
+}
+onMounted(() => {
+  void refreshConnectionUpdates();
+  updateTimer = window.setInterval(refreshConnectionUpdates, 30_000);
+  window.addEventListener("focus", refreshConnectionUpdates);
+});
+onScopeDispose(() => {
+  window.clearInterval(updateTimer);
+  window.removeEventListener("focus", refreshConnectionUpdates);
+});
 </script>
 
 <template>
@@ -44,7 +77,7 @@ watch(
         >
       </div>
       <p class="workspace-label">
-        {{ userRole === "admin" ? "Admin console" : "My space" }}
+        {{ userRole === "admin" ? "Admin Console" : "My Space" }}
       </p>
       <AppNavigation />
       <div class="profile-mini">
@@ -66,7 +99,7 @@ watch(
           <Menu :size="22" />
         </button>
         <div class="breadcrumb">
-          <span>{{ userRole === "admin" ? "Admin console" : "My space" }}</span
+          <span>{{ userRole === "admin" ? "Admin Console" : "My Space" }}</span
           ><ChevronRight :size="14" /><strong>{{ currentLabel }}</strong>
         </div>
         <button class="text-button signout-button" @click="signOut">

@@ -50,7 +50,8 @@ public class StudyBuddyConnection {
 	}
 
 	public void end() {
-		// TODO: implement - mark inactive and stamp endedAt
+		this.active = false;
+		this.endedAt = LocalDateTime.now();
 	}
 
 	public boolean isActive() {
@@ -58,15 +59,17 @@ public class StudyBuddyConnection {
 	}
 
 	public boolean involves(String studentId) {
-		// TODO: implement
-		return false;
+		if (studentId == null) return false;
+		return studentId.equals(studentAId) || studentId.equals(studentBId);
 	}
 
 	/**
 	 * Given one side of the connection, returns the other.
 	 */
 	public String getOtherStudentId(String studentId) {
-		// TODO: implement
+		if (studentId == null) return null;
+		if (studentId.equals(studentAId)) return studentBId;
+		if (studentId.equals(studentBId)) return studentAId;
 		return null;
 	}
 }

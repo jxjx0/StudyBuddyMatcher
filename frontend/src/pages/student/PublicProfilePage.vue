@@ -2,7 +2,9 @@
 import { ref, watch, onScopeDispose } from "vue";
 import { useRoute } from "vue-router";
 import { useAppState } from "../../composables/useAppState";
+import { useConnections } from "../../composables/useConnections";
 const { loadPublicProfile } = useAppState();
+const { sendMatchRequest } = useConnections();
 const route = useRoute();
 const loading = ref(false);
 const error = ref("");
@@ -84,12 +86,19 @@ onScopeDispose(() => controller?.abort());
         </div>
       </dl>
       <p class="hint">
-        Contact details are private. Buddy connection requests aren’t available
-        yet.
+        Contact details remain private until your connection is accepted.
       </p>
-      <RouterLink class="primary-button" to="/student/groups"
-        >Explore study groups</RouterLink
-      >
+      <div class="form-actions">
+        <RouterLink class="secondary-button" to="/student/groups"
+          >Explore study groups</RouterLink
+        >
+        <button
+          class="primary-button"
+          @click="sendMatchRequest(selectedProfile.id)"
+        >
+          Connect
+        </button>
+      </div>
     </section>
   </section>
 </template>

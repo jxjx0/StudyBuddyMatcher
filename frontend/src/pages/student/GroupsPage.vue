@@ -166,7 +166,7 @@ function viewGroup(id) {
   <section class="page-body groups-page">
     <header class="page-heading heading-with-action">
       <div>
-        <h1>Study groups</h1>
+        <h1>Study Groups</h1>
       </div>
       <button
         class="primary-button"
