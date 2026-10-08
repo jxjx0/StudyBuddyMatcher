@@ -456,6 +456,7 @@ function removeCourse(course) {
 watch(
   token,
   () => {
+    query.value = "";
     profileLoaded.value = false;
     profileError.value = "";
     students.value = [];

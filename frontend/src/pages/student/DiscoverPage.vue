@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { Filter, Search } from "lucide-vue-next";
 import { useAppState } from "../../composables/useAppState";
+import { useConnections } from "../../composables/useConnections";
 import { studyGoals, labelOf } from "../../utils/studyData";
 
 const {
@@ -13,6 +14,7 @@ const {
   filteredStudents,
   loadStudents,
 } = useAppState();
+const { sendMatchRequest } = useConnections();
 const router = useRouter();
 const loading = ref(false);
 const error = ref("");
@@ -63,6 +65,9 @@ function viewProfile(id) {
   router.push({ name: "student-public-profile", query: { id } });
 }
 onMounted(refresh);
+onBeforeRouteLeave(() => {
+  query.value = "";
+});
 </script>
 
 <template>
@@ -190,13 +195,18 @@ onMounted(refresh);
               }}</span>
             </div>
           </div>
-          <button
-            class="secondary-button"
-            :aria-label="`View ${student.name}'s public profile`"
-            @click="viewProfile(student.id)"
-          >
-            View profile
-          </button>
+          <div class="form-actions">
+            <button
+              class="secondary-button"
+              :aria-label="`View ${student.name}'s public profile`"
+              @click="viewProfile(student.id)"
+            >
+              View profile
+            </button>
+            <button class="primary-button" @click="sendMatchRequest(student.id)">
+              Connect
+            </button>
+          </div>
         </article>
       </div>
       <nav
@@ -216,9 +226,5 @@ onMounted(refresh);
         </button>
       </nav>
     </template>
-    <p class="feature-note">
-      Buddy requests and match scores aren’t available yet. You can join a
-      <RouterLink to="/student/groups">study group</RouterLink> today.
-    </p>
   </section>
 </template>
