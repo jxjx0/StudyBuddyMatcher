@@ -1029,6 +1029,11 @@ dd {
   display: block;
   margin-top: 4px;
 }
+.criterion-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .weight-row > input {
   width: 100%;
   min-width: 0;

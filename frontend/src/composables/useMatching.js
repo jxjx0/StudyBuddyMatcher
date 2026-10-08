@@ -13,6 +13,15 @@ const matchingWeights = ref({
   goal: 20,
   groupSize: 10,
 });
+// Which criteria the matching engine uses. A switched-off criterion has weight 0
+// and does not count towards a student's score.
+const matchingEnabled = ref({
+  course: true,
+  availability: true,
+  mode: true,
+  goal: true,
+  groupSize: true,
+});
 const matchingConfigError = ref("");
 const matchingCriteria = [
   { key: "course", label: "Course match" },
@@ -45,52 +54,102 @@ const strategyHints = {
 };
 const strategyHint = computed(() => strategyHints[matchingStrategy.value]);
 
+// The criterion a "first" strategy keeps as the highest weight, or "" for none.
+const lockedCriterion = computed(() => {
+  if (matchingStrategy.value === "course") return "course";
+  if (matchingStrategy.value === "availability") return "availability";
+  return "";
+});
+const enabledKeys = () =>
+  matchingCriteria
+    .map(({ key }) => key)
+    .filter((key) => matchingEnabled.value[key]);
+
+// Whole-number weights for the enabled criteria that add up to 100.
+// Switched-off criteria get 0.
+function presetWeights(strategy) {
+  const keys = enabledKeys();
+  const weights = Object.fromEntries(
+    matchingCriteria.map(({ key }) => [key, 0]),
+  );
+  const lead = strategy === "course" || strategy === "availability" ? strategy : "";
+  if (!lead) {
+    // Equal shares; any remainder goes to the first criteria.
+    keys.forEach((key, index) => {
+      weights[key] =
+        Math.floor(100 / keys.length) + (index < 100 % keys.length ? 1 : 0);
+    });
+    return weights;
+  }
+  // The lead criterion starts at 40 and the others share the rest, so it is
+  // strictly the highest. With only one other criterion it becomes 60/40.
+  const others = keys.filter((key) => key !== lead);
+  if (others.length === 0) {
+    weights[lead] = 100;
+    return weights;
+  }
+  const otherWeight =
+    others.length === 1 ? 40 : Math.floor(60 / others.length);
+  for (const key of others) weights[key] = otherWeight;
+  weights[lead] = 100 - otherWeight * others.length;
+  return weights;
+}
+
 function changeStrategy(value) {
   matchingStrategy.value = value;
-  if (value === "course") {
-    matchingWeights.value = {
-      course: 40,
-      availability: 15,
-      mode: 15,
-      goal: 15,
-      groupSize: 15,
-    };
-  } else if (value === "availability") {
-    matchingWeights.value = {
-      course: 15,
-      availability: 40,
-      mode: 15,
-      goal: 15,
-      groupSize: 15,
-    };
-  } else if (value === "balanced") {
-    matchingWeights.value = {
-      course: 20,
-      availability: 20,
-      mode: 20,
-      goal: 20,
-      groupSize: 20,
-    };
-  }
+  // A "first" strategy needs its lead criterion, so it is switched back on.
+  if (value === "course" || value === "availability")
+    matchingEnabled.value = { ...matchingEnabled.value, [value]: true };
+  if (value) matchingWeights.value = presetWeights(value);
 }
 
 function setWeight(key, value) {
   // Balanced always uses equal weights, so its sliders cannot be moved.
   if (matchingStrategy.value === "balanced") return;
-  let lockedKey = "";
-  if (matchingStrategy.value === "course") lockedKey = "course";
-  if (matchingStrategy.value === "availability") lockedKey = "availability";
+  if (!matchingEnabled.value[key]) return;
+  const lockedKey = lockedCriterion.value;
+  // Only enabled criteria share the 100%. If this is the only one that can move,
+  // its weight is fixed by the others.
+  const keys = enabledKeys();
+  if (keys.filter((item) => item !== lockedKey).length <= 1) return;
+  const enabledWeights = Object.fromEntries(
+    keys.map((item) => [item, matchingWeights.value[item]]),
+  );
   try {
-    matchingWeights.value = rebalanceWeights(
-      matchingWeights.value,
-      key,
-      value,
-      lockedKey,
-    );
+    matchingWeights.value = {
+      ...matchingWeights.value,
+      ...rebalanceWeights(enabledWeights, key, value, lockedKey),
+    };
     matchingConfigError.value = "";
   } catch (error) {
     matchingConfigError.value = error.message;
   }
+}
+
+function setCriterionEnabled(key, enabled) {
+  if (key === lockedCriterion.value && !enabled) return;
+  if (!enabled && enabledKeys().length === 1) {
+    matchingConfigError.value = "At least one criterion must stay switched on.";
+    return;
+  }
+  matchingConfigError.value = "";
+  matchingEnabled.value = { ...matchingEnabled.value, [key]: enabled };
+  const strategy = matchingStrategy.value;
+  if (strategy) {
+    // Strategies have fixed starting weights, so recompute them for the new set.
+    matchingWeights.value = presetWeights(strategy);
+  } else if (!enabled) {
+    // Without a strategy the freed weight is shared among the criteria still on.
+    const freed = matchingWeights.value[key];
+    const weights = { ...matchingWeights.value, [key]: 0 };
+    const keys = enabledKeys();
+    keys.forEach((item, index) => {
+      weights[item] +=
+        Math.floor(freed / keys.length) + (index < freed % keys.length ? 1 : 0);
+    });
+    matchingWeights.value = weights;
+  }
+  // A criterion switched back on without a strategy starts at 0; the admin sets its weight.
 }
 
 async function loadMatchingConfiguration() {
@@ -108,12 +167,19 @@ async function loadMatchingConfiguration() {
   };
   matchingStrategy.value = strategyKeys[strategyName] || "";
   const weights = { ...matchingWeights.value };
+  const enabled = { ...matchingEnabled.value };
   for (const criterion of config.criteria || []) {
     const key = criterionKeys[criterion.type];
-    if (key) weights[key] = Number(criterion.weight);
+    if (!key) continue;
+    enabled[key] = criterion.enabled !== false;
+    weights[key] = enabled[key] ? Number(criterion.weight) : 0;
   }
-  if (
-    Object.values(weights).reduce((total, weight) => total + weight, 0) === 100
+  matchingEnabled.value = enabled;
+  if (matchingStrategy.value === "balanced") {
+    // Balanced stores exact equal shares (e.g. 33.33); show them as whole numbers.
+    matchingWeights.value = presetWeights("balanced");
+  } else if (
+    Math.round(Object.values(weights).reduce((total, weight) => total + weight, 0)) === 100
   )
     matchingWeights.value = weights;
   matchingLoaded.value = true;
@@ -128,8 +194,8 @@ async function saveMatchingConfiguration() {
   };
   const criteria = matchingCriteria.map(({ key }) => ({
     type: criterionTypes[key],
-    weight: Number(matchingWeights.value[key]),
-    enabled: true,
+    weight: matchingEnabled.value[key] ? Number(matchingWeights.value[key]) : 0,
+    enabled: matchingEnabled.value[key],
   }));
   matchingBusy.value = true;
   matchingConfigError.value = "";
@@ -172,11 +238,14 @@ export {
   findMatches,
   matchingStrategy,
   matchingWeights,
+  matchingEnabled,
   matchingCriteria,
+  lockedCriterion,
   totalWeight,
   strategyHint,
   changeStrategy,
   setWeight,
+  setCriterionEnabled,
   saveMatchingConfiguration,
   loadMatchingConfiguration,
   matchingConfigError,

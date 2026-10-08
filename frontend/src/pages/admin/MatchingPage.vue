@@ -1,6 +1,10 @@
 <script setup>
 import { computed } from "vue";
 import { useAppState } from "../../composables/useAppState";
+import {
+  matchingEnabled,
+  setCriterionEnabled,
+} from "../../composables/useMatching";
 const {
   matchingStrategy,
   changeStrategy,
@@ -26,7 +30,14 @@ const maximumWeight = computed(() =>
 );
 // Balanced uses equal weights, so every slider is locked.
 const allLocked = computed(() => matchingStrategy.value === "balanced");
-const isLocked = (key) => allLocked.value || key === lockedKey.value;
+// setWeight may cap the value (e.g. below the locked weight). If the stored weight
+// does not change, Vue does not redraw the input, so it is reset here.
+function updateWeight(key, input) {
+  setWeight(key, input.value);
+  input.value = matchingWeights.value[key];
+}
+const isLocked = (key) =>
+  allLocked.value || key === lockedKey.value || !matchingEnabled.value[key];
 </script>
 <template>
   <section class="page-body narrow-page">
@@ -60,8 +71,9 @@ const isLocked = (key) => allLocked.value || key === lockedKey.value;
           <strong>{{ totalWeight }}% total</strong>
         </div>
         <p class="hint">
-          Changing a weight shares the remaining percentage evenly among the
-          other unlocked criteria.
+          Untick a criterion to leave it out of matching. Changing a weight
+          shares the remaining percentage evenly among the other unlocked
+          criteria.
         </p>
         <div class="weight-list">
           <div
@@ -70,25 +82,39 @@ const isLocked = (key) => allLocked.value || key === lockedKey.value;
             class="weight-row"
           >
             <div>
-              <label :for="`weight-${criterion.key}`">{{
-                criterion.label
-              }}</label
-              ><small v-if="criterion.key === lockedKey"
+              <label class="criterion-toggle"
+                ><input
+                  type="checkbox"
+                  :checked="matchingEnabled[criterion.key]"
+                  :disabled="criterion.key === lockedKey"
+                  :aria-label="`Use ${criterion.label} in matching`"
+                  @change="
+                    setCriterionEnabled(criterion.key, $event.target.checked)
+                  "
+                /><span :id="`weight-label-${criterion.key}`">{{
+                  criterion.label
+                }}</span></label
+              ><small v-if="!matchingEnabled[criterion.key]"
+                >Not used in matching</small
+              ><small v-else-if="criterion.key === lockedKey"
                 >Locked highest priority</small
               ><small v-else-if="allLocked">Equal weight</small>
             </div>
+            <!-- Every slider uses the same 0–100 scale so lengths can be compared.
+                 The cap below the locked weight is applied by setWeight. -->
             <input
               type="range"
               min="0"
-              :max="isLocked(criterion.key) ? 100 : maximumWeight"
+              max="100"
               :value="matchingWeights[criterion.key]"
               :aria-label="`${criterion.label} weight slider`"
               :disabled="isLocked(criterion.key)"
-              @input="setWeight(criterion.key, $event.target.value)"
+              @input="updateWeight(criterion.key, $event.target)"
             />
             <div class="weight-input">
               <input
                 :id="`weight-${criterion.key}`"
+                :aria-labelledby="`weight-label-${criterion.key}`"
                 class="weight-number"
                 type="number"
                 min="0"
@@ -96,7 +122,7 @@ const isLocked = (key) => allLocked.value || key === lockedKey.value;
                 step="1"
                 :value="matchingWeights[criterion.key]"
                 :disabled="isLocked(criterion.key)"
-                @input="setWeight(criterion.key, $event.target.value)"
+                @input="updateWeight(criterion.key, $event.target)"
               /><span>%</span>
             </div>
           </div>
