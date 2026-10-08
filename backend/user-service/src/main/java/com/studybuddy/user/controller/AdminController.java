@@ -69,9 +69,9 @@ public class AdminController {
 	}
 
 	@PutMapping("/accounts/{userId}/status")
-	public AccountResponse changeAccountStatus(@PathVariable String userId,
+	public AccountResponse setAccountStatus(@PathVariable String userId,
 									@RequestParam AccountStatus status) {
-		return AccountResponse.from(userAccountService.changeAccountStatus(userId, status));
+		return AccountResponse.from(userAccountService.setAccountStatus(userId, status));
 	}
 
 	@DeleteMapping("/accounts/{userId}")
