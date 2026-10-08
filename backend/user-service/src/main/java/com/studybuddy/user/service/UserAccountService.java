@@ -51,9 +51,9 @@ public class UserAccountService {
 	public void deleteUserAccount(String userId) { delete(userId); }
 	public AccountStatus getAccountStatus(String userId) { return findById(userId).getAccountStatus(); }
 	public AccountStatus viewAccountStatus(String userId) { return getAccountStatus(userId); }
-	public User changeAccountStatus(String userId, AccountStatus status) {
+	public User setAccountStatus(String userId, AccountStatus status) {
 		User user = findById(userId);
-		user.changeAccountStatus(status);
+		user.setAccountStatus(status);
 		return userRepository.save(user);
 	}
 	public Map<String, Object> getUsageSummary() {

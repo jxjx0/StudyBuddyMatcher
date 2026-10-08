@@ -6,7 +6,7 @@ The frontend lives in [frontend/](frontend/) and is a Vue 3 + Vite app.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18+ recommended)
+- [Node.js](https://nodejs.org/) 22.22.2+, 24.15.0+, or 26+ (including UI tests)
 
 ### Setup
 
@@ -31,6 +31,7 @@ This starts Vite's dev server (default: [http://localhost:5173](http://localhost
 ```bash
 npm run build    # build for production (outputs to frontend/dist)
 npm run start    # preview the production build locally
+npm test         # utility and study-group UI regression tests
 ```
 
 ## Backend
@@ -44,15 +45,30 @@ The backend lives in [backend/](backend/) and is made up of Spring Boot services
 
 Maven does not need to be installed; the scripts use the bundled Maven wrapper (`mvnw.cmd`). The first start downloads Maven and the dependencies, so it takes a few minutes.
 
+### Run locally with cloud Supabase (macOS / Linux)
+
+Use Python 3.9 or newer. Install the frontend dependencies, then configure `backend/.env` using [backend/.env.example](backend/.env.example). The database must already have the project tables; see [the backend setup](backend/README.md).
+
+From the repository root:
+
+```bash
+python3 scripts/start-cloud.py
+```
+
+This starts the frontend at `http://127.0.0.1:5173` and all five backend services using your cloud database. Sign in with an existing cloud account. It does not seed data or create tables. Ctrl-C stops the local processes and keeps cloud data.
+
+`python3 scripts/group-local.py demo` is a separate, disposable test environment. Its Alice/Bob/Carol accounts and groups exist only in temporary local PostgreSQL and are removed when that runner stops.
+
 ### Start the backend (Windows, PowerShell)
 
 From the `backend` folder:
 
 ```powershell
 cd backend
-.\start-backend.ps1        # user-service, api-gateway, matching-service
-.\start-backend.ps1 -All   # also connection-service and group-service
+.\start-backend.ps1 -All   # all services, including study groups
 ```
+
+Study groups requires `-All`. Running the script without it starts only user-service, api-gateway and matching-service.
 
 The script builds the project once, then opens each service in its own tab of a Windows Terminal window named "backend" (or in separate PowerShell windows if Windows Terminal isn't installed). Each tab shows that service's logs.
 
@@ -69,7 +85,7 @@ The frontend talks to the API gateway on port `8080`, so start the backend befor
 If PowerShell says running scripts is disabled, run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start-backend.ps1
+powershell -ExecutionPolicy Bypass -File .\start-backend.ps1 -All
 ```
 
 > Open the `.ps1` file from a PowerShell prompt — double-clicking it in File Explorer just opens it in Notepad.

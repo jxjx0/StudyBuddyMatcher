@@ -47,12 +47,19 @@ public class UserRepository {
 
 	private User mapUser(ResultSet rs, int row) throws SQLException {
 		String role = rs.getString("user_role");
-		User user = "ADMIN".equals(role) ? new SystemAdministrator() : new Student();
-		user.setUserId(rs.getString("user_id"));
-		user.setEmail(rs.getString("email"));
-		user.setPasswordHash(rs.getString("password_hash"));
-		user.setAccountStatus(AccountStatus.valueOf(rs.getString("account_status")));
+		String userId = rs.getString("user_id");
+		String email = rs.getString("email");
+		String passwordHash = rs.getString("password_hash");
+		AccountStatus accountStatus = AccountStatus.valueOf(rs.getString("account_status"));
 		String profile = rs.getString("profile_data");
+		String adminName = "System Administrator";
+		if ("ADMIN".equals(role) && profile != null) {
+			try { adminName = mapper.readTree(profile).path("name").asText(adminName); }
+			catch (JacksonException e) { throw new IllegalStateException("Could not read saved administrator profile", e); }
+		}
+		User user = "ADMIN".equals(role)
+				? new SystemAdministrator(userId, email, passwordHash, adminName)
+				: new Student(userId, email, passwordHash, accountStatus);
 		if (profile != null && user instanceof Student student) {
 			StudentProfile saved;
 			try { saved = mapper.readValue(profile, StudentProfile.class); }
@@ -69,9 +76,6 @@ public class UserRepository {
 			student.getWeeklyAvailability().addAll(saved.weeklyAvailability());
 			student.setGroupSizePreference(saved.groupSizePreference());
 			student.getStudyGoals().addAll(saved.studyGoals());
-		} else if (profile != null && user instanceof SystemAdministrator admin) {
-			try { admin.setName(mapper.readTree(profile).path("name").asText("System Administrator")); }
-			catch (JacksonException e) { throw new IllegalStateException("Could not read saved administrator profile", e); }
 		}
 		return user;
 	}

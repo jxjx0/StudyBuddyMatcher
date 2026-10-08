@@ -8,8 +8,7 @@ public class Course {
 	private String courseCode;
 	private String courseName;
 
-	public Course() {
-	}
+	public Course(){}
 
 	public Course(String courseCode, String courseName) {
 		this.courseCode = courseCode;

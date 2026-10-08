@@ -1,34 +1,49 @@
 package com.studybuddy.group.repository;
 
-import com.studybuddy.group.model.StudyGroup;
+import com.studybuddy.group.model.*;
+import tools.jackson.databind.ObjectMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import java.sql.*;
+import org.springframework.transaction.annotation.*;
+import java.util.*;
 
-import java.util.List;
-import java.util.Optional;
-
-/**
- * Storage for study groups. Stubbed - nothing is stored yet.
- */
 @Repository
 public class StudyGroupRepository {
-
-	public List<StudyGroup> findAll() {
-		// TODO: implement
-		return List.of();
-	}
-
-	public Optional<StudyGroup> findById(String groupId) {
-		// TODO: implement
-		return Optional.empty();
-	}
-
-	public List<StudyGroup> findByCourseCode(String courseCode) {
-		// TODO: implement
-		return List.of();
-	}
-
-	public StudyGroup save(StudyGroup group) {
-		// TODO: implement - generate an id when the group does not have one
-		return group;
-	}
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper mapper;
+    public StudyGroupRepository(JdbcTemplate jdbc, ObjectMapper mapper) { this.jdbc=jdbc; this.mapper=mapper; }
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
+    public List<StudyGroup> findAll() { return jdbc.query("SELECT * FROM study_groups ORDER BY created_at DESC, group_id", this::map); }
+    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
+    public Optional<StudyGroup> findById(String id) { return find(id, false); }
+    public Optional<StudyGroup> lockById(String id) { return find(id, true); }
+    private Optional<StudyGroup> find(String id, boolean lock) {
+        return jdbc.query("SELECT * FROM study_groups WHERE group_id=?" + (lock ? " FOR UPDATE" : ""), this::map, UUID.fromString(id)).stream().findFirst();
+    }
+    private StudyGroup map(ResultSet rs, int row) throws SQLException {
+        String id = rs.getString("group_id");
+        // Separate statement after taking the group lock: see memberships committed by a previous lock holder.
+        List<String> members = jdbc.queryForList("SELECT student_id::text FROM study_group_members WHERE group_id=? ORDER BY joined_at, student_id", String.class, UUID.fromString(id));
+        List<StudyGoal> goals = Arrays.stream((String[])rs.getArray("study_goals").getArray()).map(StudyGoal::valueOf).toList();
+        return StudyGroup.restore(id, rs.getString("course_code"), rs.getString("leader_id"), rs.getString("group_name"),
+                rs.getString("description"), rs.getInt("max_group_size"), GroupStatus.valueOf(rs.getString("status")),
+                MeetingMode.valueOf(rs.getString("meeting_mode")), goals,
+                List.of(mapper.readValue(rs.getString("availability"), TimeSlot[].class)), members);
+    }
+    /** Caller holds the group lock for updates; creation and membership are in the same transaction. */
+    public StudyGroup save(StudyGroup g) {
+        jdbc.update("""
+            INSERT INTO study_groups(group_id, group_name, description, course_code, leader_id, max_group_size, status, meeting_mode, study_goals, availability)
+            VALUES (?,?,?,?,?,?,?,?,CAST(? AS text[]),CAST(? AS jsonb))
+            ON CONFLICT (group_id) DO UPDATE SET group_name=EXCLUDED.group_name, description=EXCLUDED.description,
+              max_group_size=EXCLUDED.max_group_size, status=EXCLUDED.status, meeting_mode=EXCLUDED.meeting_mode,
+              study_goals=EXCLUDED.study_goals, availability=EXCLUDED.availability, updated_at=now()
+            """, UUID.fromString(g.getGroupId()), g.getGroupName(), g.getDescription(), g.getCourseCode(), UUID.fromString(g.getLeaderId()),
+                g.getMaxGroupSize(), g.getStatus().name(), g.getMeetingMode().name(), g.getStudyGoals().stream().map(Enum::name).toArray(String[]::new), mapper.writeValueAsString(g.getAvailability()));
+        UUID id=UUID.fromString(g.getGroupId());
+        for (String member : g.getMemberIds()) jdbc.update("INSERT INTO study_group_members(group_id,student_id) VALUES (?,?) ON CONFLICT DO NOTHING", id, UUID.fromString(member));
+        jdbc.update("DELETE FROM study_group_members WHERE group_id=? AND NOT (student_id=ANY(CAST(? AS uuid[])))", id, g.getMemberIds().toArray(String[]::new));
+        return g;
+    }
 }

@@ -2,6 +2,19 @@ server:
   port: ${GROUP_SERVICE_PORT:8085}
 
 spring:
+  config:
+    import: "optional:file:./.env[.properties],optional:file:../.env[.properties],optional:file:./backend/.env[.properties],optional:file:../backend/.env[.properties]"
+  datasource:
+    url: ${SUPABASE_JDBC_URL:jdbc:postgresql://localhost:5432/studybuddy}
+    username: ${SUPABASE_DB_USER:postgres}
+    password: ${SUPABASE_DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:2}
+      minimum-idle: ${DB_MIN_IDLE:0}
+      idle-timeout: 60000
+  sql:
+    init:
+      mode: never
   application:
     name: group-service
 
@@ -15,3 +28,7 @@ management:
     web:
       exposure:
         include: health,info
+
+app:
+  auth:
+    jwt-secret: ${JWT_SECRET:}
