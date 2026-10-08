@@ -7,6 +7,7 @@ import com.studybuddy.connection.repository.StudyBuddyConnectionRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Match requests and the connections they produce.
@@ -40,7 +41,7 @@ public class MatchRequestService {
 		if (studentId == null) return List.of();
 		return matchRequestRepository.findByRecipientId(studentId).stream()
 				.filter(MatchRequest::isPending)
-				.collect(java.util.stream.Collectors.toList());
+				.collect(Collectors.toList());
 	}
 
 	public MatchRequest send(String senderId, String recipientId, String message) {
