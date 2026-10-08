@@ -4,6 +4,7 @@ import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { Filter, Search } from "lucide-vue-next";
 import { useAppState } from "../../composables/useAppState";
 import { useConnections } from "../../composables/useConnections";
+import { findMatches } from "../../composables/useMatching";
 import { studyGoals, labelOf } from "../../utils/studyData";
 
 const {
@@ -13,6 +14,8 @@ const {
   showBuddyFilters,
   filteredStudents,
   loadStudents,
+  mapStudent,
+  user,
 } = useAppState();
 const {
   outgoingRequests,
@@ -20,23 +23,59 @@ const {
   sendMatchRequest,
 } = useConnections();
 const router = useRouter();
+
+// "Best matches" asks the matching engine for a ranked, scored list.
+// "Browse all" lists every student and filters them in the browser.
+const tab = ref("matches");
+const views = [
+  { key: "matches", label: "Best matches" },
+  { key: "browse", label: "Browse all" },
+];
+
 const loading = ref(false);
 const error = ref("");
+
+const matchFilters = ref({
+  course: "",
+  goal: "",
+  mode: "",
+  minOverlapMinutes: "",
+});
+const matches = ref([]);
+const matchesLoading = ref(false);
+const matchesError = ref("");
+const criterionLabels = {
+  COURSE: "Course",
+  AVAILABILITY: "Availability",
+  STUDY_MODE: "Study mode",
+  STUDY_GOAL: "Study goal",
+  GROUP_SIZE: "Group size",
+};
+
 const sendingRequestIds = ref(new Set());
 const sentRequestIds = ref(new Set());
 const page = ref(1);
 const pageSize = 10;
+const shownStudents = computed(() =>
+  tab.value === "matches" ? matches.value : filteredStudents.value,
+);
+const shownLoading = computed(() =>
+  tab.value === "matches" ? matchesLoading.value : loading.value,
+);
+const shownError = computed(() =>
+  tab.value === "matches" ? matchesError.value : error.value,
+);
 const pageCount = computed(() =>
-  Math.ceil(filteredStudents.value.length / pageSize),
+  Math.ceil(shownStudents.value.length / pageSize),
 );
 const pagedStudents = computed(() =>
-  filteredStudents.value.slice(
+  shownStudents.value.slice(
     (page.value - 1) * pageSize,
     page.value * pageSize,
   ),
 );
 watch(
-  [filters, query],
+  [filters, query, matchFilters, tab],
   () => {
     page.value = 1;
   },
@@ -57,7 +96,46 @@ async function refresh() {
     loading.value = false;
   }
 }
+
+// A newer search replaces an older one, so a slow earlier response is ignored.
+let latestMatchSearch = 0;
+async function loadMatches() {
+  const searchId = ++latestMatchSearch;
+  matchesLoading.value = true;
+  matchesError.value = "";
+  try {
+    const results = await findMatches(user.value.userId, matchFilters.value);
+    if (searchId !== latestMatchSearch) return;
+    matches.value = results.map((result) => ({
+      ...mapStudent(result.candidate),
+      score: Math.round(result.score),
+      matched: (result.matchedCriteria || []).map(
+        (criterion) => criterionLabels[criterion] || labelOf(criterion),
+      ),
+    }));
+  } catch (problem) {
+    if (searchId === latestMatchSearch && problem.name !== "AbortError")
+      matchesError.value = problem.message;
+  } finally {
+    if (searchId === latestMatchSearch) matchesLoading.value = false;
+  }
+}
+watch(matchFilters, loadMatches, { deep: true });
+
+function retry() {
+  if (tab.value === "matches") loadMatches();
+  else refresh();
+}
 function resetFilters() {
+  if (tab.value === "matches") {
+    matchFilters.value = {
+      course: "",
+      goal: "",
+      mode: "",
+      minOverlapMinutes: "",
+    };
+    return;
+  }
   query.value = "";
   filters.value = {
     course: "",
@@ -99,7 +177,10 @@ async function connect(studentId) {
     sendingRequestIds.value = pending;
   }
 }
-onMounted(refresh);
+onMounted(() => {
+  loadMatches();
+  refresh();
+});
 onBeforeRouteLeave(() => {
   query.value = "";
 });
@@ -111,7 +192,66 @@ onBeforeRouteLeave(() => {
       <h1>Discover Study Buddies</h1>
       <p>Find students who share your courses, goals and study style.</p>
     </header>
-    <div class="filter-surface">
+    <div class="group-tabs" aria-label="Discover views">
+      <button
+        v-for="view in views"
+        :key="view.key"
+        :class="{ active: tab === view.key }"
+        :aria-pressed="tab === view.key"
+        @click="tab = view.key"
+      >
+        {{ view.label }}
+      </button>
+    </div>
+
+    <div v-if="tab === 'matches'" class="filter-surface">
+      <p class="hint">
+        Students are ranked by how well they match your profile. Narrow the
+        list with the filters below.
+      </p>
+      <div class="form-grid">
+        <label class="field"
+          ><span>Course</span
+          ><select v-model="matchFilters.course">
+            <option value="">Any course</option>
+            <option
+              v-for="course in courses"
+              :key="course"
+              :value="course.split(' ')[0]"
+            >
+              {{ course }}
+            </option>
+          </select></label
+        >
+        <label class="field"
+          ><span>Study goal</span
+          ><select v-model="matchFilters.goal">
+            <option value="">Any goal</option>
+            <option v-for="goal in studyGoals" :key="goal" :value="goal">
+              {{ labelOf(goal) }}
+            </option>
+          </select></label
+        >
+        <label class="field"
+          ><span>Study mode</span
+          ><select v-model="matchFilters.mode">
+            <option value="">Any mode</option>
+            <option value="ONLINE">Online</option>
+            <option value="IN_PERSON">In-person</option>
+          </select></label
+        >
+        <label class="field"
+          ><span>Shared free time</span
+          ><select v-model="matchFilters.minOverlapMinutes">
+            <option value="">Any</option>
+            <option value="60">At least 1 hour a week</option>
+            <option value="120">At least 2 hours a week</option>
+          </select></label
+        >
+      </div>
+    </div>
+
+    <div v-else class="filter-surface">
       <label class="search-box"
         ><Search :size="20" aria-hidden="true" /><input
           v-model="query"
@@ -187,27 +327,41 @@ onBeforeRouteLeave(() => {
         </p>
       </div>
     </div>
+
     <div class="results-heading">
       <p role="status">
         {{
-          loading
-            ? "Loading students…"
-            : `${filteredStudents.length} students found`
+          shownLoading
+            ? tab === "matches"
+              ? "Finding your best matches…"
+              : "Loading students…"
+            : tab === "matches"
+              ? `${shownStudents.length} matches found`
+              : `${shownStudents.length} students found`
         }}
       </p>
       <button class="text-button" @click="resetFilters">Reset filters</button>
     </div>
-    <div v-if="error" class="error-message" role="alert">
-      <p>{{ error }}</p>
-      <button class="secondary-button" @click="refresh">Try again</button>
+    <div v-if="shownError" class="error-message" role="alert">
+      <p>{{ shownError }}</p>
+      <button class="secondary-button" @click="retry">Try again</button>
     </div>
-    <template v-else-if="!loading">
+    <template v-else-if="!shownLoading">
       <div v-if="!pagedStudents.length" class="empty-state">
         <Search :size="30" />
-        <h2>No students found</h2>
-        <p>Try a different name, or reset your filters to see everyone.</p>
+        <template v-if="tab === 'matches'">
+          <h2>No matches found</h2>
+          <p>
+            Try removing a filter, or add courses and availability to your
+            profile so we can find better matches.
+          </p>
+        </template>
+        <template v-else>
+          <h2>No students found</h2>
+          <p>Try a different name, or reset your filters to see everyone.</p>
+        </template>
         <button class="secondary-button" @click="resetFilters">
-          Show all students
+          Reset filters
         </button>
       </div>
       <div v-else class="student-list">
@@ -221,9 +375,20 @@ onBeforeRouteLeave(() => {
           </div>
           <div class="student-info">
             <h2>{{ student.name }}</h2>
+            <p v-if="tab === 'matches'" class="match-score">
+              {{ student.score }}% match
+            </p>
             <p>{{ student.programme }}</p>
             <p>{{ student.course || "No course listed yet" }}</p>
-            <div class="chip-list">
+            <div v-if="tab === 'matches'" class="chip-list">
+              <span
+                v-for="criterion in student.matched"
+                :key="criterion"
+                class="tag tag-success"
+                >{{ criterion }}</span
+              >
+            </div>
+            <div v-else class="chip-list">
               <span class="tag">{{ student.mode }}</span
               ><span v-for="goal in student.goals" :key="goal" class="tag">{{
                 goal

@@ -572,6 +572,10 @@ legend {
   color: #346247;
   background: #e5eee3;
 }
+.student-info .match-score {
+  color: var(--accent);
+  font-weight: 700;
+}
 .chip-list {
   display: flex;
   flex-wrap: wrap;

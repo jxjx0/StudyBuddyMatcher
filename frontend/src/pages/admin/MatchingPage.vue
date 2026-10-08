@@ -24,6 +24,9 @@ const lockedKey = computed(() => {
 const maximumWeight = computed(() =>
   lockedKey.value ? matchingWeights.value[lockedKey.value] - 1 : 100,
 );
+// Balanced uses equal weights, so every slider is locked.
+const allLocked = computed(() => matchingStrategy.value === "balanced");
+const isLocked = (key) => allLocked.value || key === lockedKey.value;
 </script>
 <template>
   <section class="page-body narrow-page">
@@ -72,15 +75,15 @@ const maximumWeight = computed(() =>
               }}</label
               ><small v-if="criterion.key === lockedKey"
                 >Locked highest priority</small
-              >
+              ><small v-else-if="allLocked">Equal weight</small>
             </div>
             <input
               type="range"
               min="0"
-              :max="criterion.key === lockedKey ? 100 : maximumWeight"
+              :max="isLocked(criterion.key) ? 100 : maximumWeight"
               :value="matchingWeights[criterion.key]"
               :aria-label="`${criterion.label} weight slider`"
-              :disabled="criterion.key === lockedKey"
+              :disabled="isLocked(criterion.key)"
               @input="setWeight(criterion.key, $event.target.value)"
             />
             <div class="weight-input">
@@ -89,10 +92,10 @@ const maximumWeight = computed(() =>
                 class="weight-number"
                 type="number"
                 min="0"
-                :max="criterion.key === lockedKey ? 100 : maximumWeight"
+                :max="isLocked(criterion.key) ? 100 : maximumWeight"
                 step="1"
                 :value="matchingWeights[criterion.key]"
-                :disabled="criterion.key === lockedKey"
+                :disabled="isLocked(criterion.key)"
                 @input="setWeight(criterion.key, $event.target.value)"
               /><span>%</span>
             </div>

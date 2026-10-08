@@ -525,6 +525,7 @@ export function useAppState() {
     deleteAccount,
     nav,
     filteredStudents,
+    mapStudent,
     matchingSlots,
     go,
     signIn,

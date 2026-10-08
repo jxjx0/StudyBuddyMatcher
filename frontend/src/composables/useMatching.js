@@ -40,8 +40,7 @@ const totalWeight = computed(() =>
 const strategyHints = {
   course: "Course match is locked as the highest priority.",
   availability: "Availability is locked as the highest priority.",
-  balanced:
-    "Balanced matching keeps all criteria active without locking one priority.",
+  balanced: "Balanced matching gives every criterion an equal weight.",
   "": "No strategy rules are applied; adjust criteria freely.",
 };
 const strategyHint = computed(() => strategyHints[matchingStrategy.value]);
@@ -76,6 +75,8 @@ function changeStrategy(value) {
 }
 
 function setWeight(key, value) {
+  // Balanced always uses equal weights, so its sliders cannot be moved.
+  if (matchingStrategy.value === "balanced") return;
   let lockedKey = "";
   if (matchingStrategy.value === "course") lockedKey = "course";
   if (matchingStrategy.value === "availability") lockedKey = "availability";
@@ -153,7 +154,22 @@ async function saveMatchingConfiguration() {
   }
 }
 
+// Ranked study buddy suggestions from matching-service, best match first.
+// Only filters that are set are sent; an empty body means "score everyone".
+async function findMatches(userId, { course, goal, mode, minOverlapMinutes } = {}) {
+  const criteria = { filters: {} };
+  if (course) criteria.course = { courseCode: course };
+  if (goal) criteria.studyGoal = goal;
+  if (mode) criteria.filters.meetingMode = mode;
+  if (minOverlapMinutes) criteria.filters.minOverlapMinutes = Number(minOverlapMinutes);
+  return api(`/api/matching/students/${userId}/search`, {
+    method: "POST",
+    body: JSON.stringify(criteria),
+  });
+}
+
 export {
+  findMatches,
   matchingStrategy,
   matchingWeights,
   matchingCriteria,
