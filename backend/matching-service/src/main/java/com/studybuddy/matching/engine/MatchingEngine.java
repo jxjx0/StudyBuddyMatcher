@@ -178,7 +178,8 @@ public class MatchingEngine {
 	private List<String> matchedCriteria(Map<CriterionType, Double> components, List<MatchingCriterion> weights) {
 		List<String> matched = new ArrayList<>();
 		for (MatchingCriterion criterion : weights) {
-			if (criterion == null || !criterion.isEnabled() || criterion.getType() == null) {
+			// Same skip rule as weightedScore, so a tag only appears for criteria that counted.
+			if (criterion == null || !criterion.isEnabled() || criterion.getType() == null || criterion.getWeight() <= 0) {
 				continue;
 			}
 			if (components.getOrDefault(criterion.getType(), 0.0) > 0) {
