@@ -1,12 +1,15 @@
 package com.studybuddy.matching.engine;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.studybuddy.matching.client.StudentClient;
@@ -35,10 +38,13 @@ import com.studybuddy.matching.service.MatchingConfigurationService;
 @Service
 public class MatchingEngine {
 
+	private static final Logger log = LoggerFactory.getLogger(MatchingEngine.class);
+
 	private static final int FULL_OVERLAP_MINUTES = 120;
 
-	private MatchingConfig currentConfig;
-
+	// The UML shows currentConfig as a field. It is read into a local variable on
+	// each search instead: Spring shares one MatchingEngine across all requests,
+	// so a field would let two simultaneous searches overwrite each other's config.
 	private final MatchingConfigurationService configService;
 	private final StudentClient studentClient;
 
@@ -51,7 +57,9 @@ public class MatchingEngine {
 		if (student == null) {
 			return List.of();
 		}
-		this.currentConfig = configService.getCurrentConfig();
+		MatchingConfig currentConfig = configService.getCurrentConfig();
+		// The weights are the same for every candidate, so they are worked out once per search.
+		List<MatchingCriterion> weights = resolveWeights(currentConfig);
 		SearchCriteria filters = criteria == null ? new SearchCriteria() : criteria;
 
 		List<MatchResult> results = new ArrayList<>();
@@ -68,37 +76,16 @@ public class MatchingEngine {
 			if (!passesFilters(student, candidate, filters)) {
 				continue;
 			}
-			double score = computeScore(student, candidate, currentConfig);
-			MatchResult result = new MatchResult(candidate, round(score), matchedCriteria(student, candidate, currentConfig));
-			results.add(result);
+			Map<CriterionType, Double> components = scoreComponents(student, candidate);
+			double score = weightedScore(components, weights);
+			results.add(new MatchResult(candidate, round(score), matchedCriteria(components, weights)));
 		}
-		for (int i = 0; i < results.size() - 1; i++) {
-			for (int j = i + 1; j < results.size(); j++) {
-				if (results.get(j).getScore() > results.get(i).getScore()) {
-					MatchResult temp = results.get(i);
-					results.set(i, results.get(j));
-					results.set(j, temp);
-				}
-			}
-		}
+		results.sort(Comparator.comparingDouble(MatchResult::getScore).reversed());
 		return results;
 	}
 
 	public double computeScore(StudentDto a, StudentDto b, MatchingConfig config) {
-		List<MatchingCriterion> criteria = config.getStrategy() == null
-				? config.getCriteria()
-				: config.getStrategy().applyStrategy(config.getCriteria());
-		Map<CriterionType, Double> components = scoreComponents(a, b);
-		double totalWeight = 0;
-		double weightedSum = 0;
-		for (MatchingCriterion criterion : criteria) {
-			if (criterion == null || !criterion.isEnabled() || criterion.getType() == null || criterion.getWeight() <= 0) {
-				continue;
-			}
-			totalWeight += criterion.getWeight();
-			weightedSum += criterion.getWeight() * components.getOrDefault(criterion.getType(), 0.0);
-		}
-		return totalWeight <= 0 ? 0 : weightedSum / totalWeight * 100.0;
+		return weightedScore(scoreComponents(a, b), resolveWeights(config));
 	}
 
 	public double scoreCourseMatch(StudentDto a, StudentDto b) {
@@ -156,10 +143,41 @@ public class MatchingEngine {
 		return components;
 	}
 
-	private List<String> matchedCriteria(StudentDto a, StudentDto b, MatchingConfig config) {
-		Map<CriterionType, Double> components = scoreComponents(a, b);
+	/**
+	 * The weights to score with: the strategy's version of the administrator's
+	 * weights, or the administrator's weights as they are when no strategy is set.
+	 */
+	private List<MatchingCriterion> resolveWeights(MatchingConfig config) {
+		if (config.getStrategy() == null) {
+			return config.getCriteria();
+		}
+		try {
+			return config.getStrategy().applyStrategy(config.getCriteria());
+		} catch (IllegalArgumentException e) {
+			// Weights saved before the strategy rules were enforced can break them. Searching should
+			// still work, so the administrator's weights are used until they are saved again.
+			log.warn("Saved matching weights break the {} rule ({}); using them as saved.",
+					config.getStrategy().getName(), e.getMessage());
+			return config.getCriteria();
+		}
+	}
+
+	private double weightedScore(Map<CriterionType, Double> components, List<MatchingCriterion> weights) {
+		double totalWeight = 0;
+		double weightedSum = 0;
+		for (MatchingCriterion criterion : weights) {
+			if (criterion == null || !criterion.isEnabled() || criterion.getType() == null || criterion.getWeight() <= 0) {
+				continue;
+			}
+			totalWeight += criterion.getWeight();
+			weightedSum += criterion.getWeight() * components.getOrDefault(criterion.getType(), 0.0);
+		}
+		return totalWeight <= 0 ? 0 : weightedSum / totalWeight * 100.0;
+	}
+
+	private List<String> matchedCriteria(Map<CriterionType, Double> components, List<MatchingCriterion> weights) {
 		List<String> matched = new ArrayList<>();
-		for (MatchingCriterion criterion : config.getCriteria()) {
+		for (MatchingCriterion criterion : weights) {
 			if (criterion == null || !criterion.isEnabled() || criterion.getType() == null) {
 				continue;
 			}
@@ -195,7 +213,11 @@ public class MatchingEngine {
 			return meetingMode;
 		}
 		if (value instanceof String text && !text.isBlank()) {
-			return MeetingMode.valueOf(text.trim().toUpperCase());
+			try {
+				return MeetingMode.valueOf(text.trim().toUpperCase());
+			} catch (IllegalArgumentException e) {
+				throw new IllegalArgumentException("meetingMode must be IN_PERSON, ONLINE or EITHER");
+			}
 		}
 		return null;
 	}
@@ -206,7 +228,11 @@ public class MatchingEngine {
 			return number.intValue();
 		}
 		if (value instanceof String text && !text.isBlank()) {
-			return Integer.parseInt(text.trim());
+			try {
+				return Integer.parseInt(text.trim());
+			} catch (NumberFormatException e) {
+				throw new IllegalArgumentException("minOverlapMinutes must be a whole number of minutes");
+			}
 		}
 		return 0;
 	}

@@ -3,6 +3,7 @@ package com.studybuddy.matching.client;
 import com.studybuddy.matching.dto.StudentDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
@@ -38,10 +39,17 @@ public class StudentClient {
 				});
 	}
 
+	/**
+	 * One student, or null when user-service has no student with this id.
+	 */
 	public StudentDto findStudent(String userId) {
-		return restClient.get()
-				.uri("/api/students/{userId}", userId)
-				.retrieve()
-				.body(StudentDto.class);
+		try {
+			return restClient.get()
+					.uri("/api/students/{userId}", userId)
+					.retrieve()
+					.body(StudentDto.class);
+		} catch (HttpClientErrorException.NotFound e) {
+			return null;
+		}
 	}
 }

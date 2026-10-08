@@ -10,6 +10,10 @@ import com.studybuddy.matching.model.MatchingCriterion;
 
 /**
  * Gives course alignment the largest share of the weighting.
+ *
+ * The administrator chooses the weights; this strategy only enforces its rule
+ * that COURSE must carry the highest weight. Weights that follow the rule are
+ * returned unchanged.
  */
 @Component
 public class CourseFirstMatchingStrategy implements MatchingStrategy {
@@ -25,59 +29,32 @@ public class CourseFirstMatchingStrategy implements MatchingStrategy {
 			return new ArrayList<>();
 		}
 
-		int enabledCount = 0;
-		boolean leadEnabled = false;
-
-		// Count enabled criteria and check if COURSE is enabled
+		// Find the weight given to COURSE. It must be enabled for this strategy to make sense.
+		MatchingCriterion course = null;
 		for (MatchingCriterion criterion : criteria) {
-			if (criterion != null && criterion.isEnabled()) {
-				enabledCount++;
-				if (criterion.getType() == CriterionType.COURSE) {
-					leadEnabled = true;
-				}
+			if (criterion != null && criterion.isEnabled() && criterion.getType() == CriterionType.COURSE) {
+				course = criterion;
+			}
+		}
+		if (course == null) {
+			throw new IllegalArgumentException("Course-first matching requires the course criterion to be enabled");
+		}
+
+		// Every other enabled criterion must weigh strictly less than COURSE.
+		for (MatchingCriterion criterion : criteria) {
+			if (criterion != null && criterion != course && criterion.isEnabled()
+					&& criterion.getWeight() >= course.getWeight()) {
+				throw new IllegalArgumentException("Course-first matching requires course to have the highest weight");
 			}
 		}
 
+		// Return copies so the stored configuration can never be changed through this list.
 		List<MatchingCriterion> weighted = new ArrayList<>();
-
-		if (enabledCount == 0) {
-			// No enabled criteria, so copy the original criteria
-			for (MatchingCriterion criterion : criteria) {
-				if (criterion != null) {
-					weighted.add(new MatchingCriterion(criterion.getType(), criterion.getWeight(), criterion.isEnabled()));
-				}
-			}
-
-			return weighted;
-		}
-
-		double unit;
-
-		if (leadEnabled) {
-			// If COURSE is enabled, add additional weight for COURSE
-			// Example: COURSE, AVAILABILITY is enabled, without +1, each criteria will have 0.50 weight
-			// With +1, each criteria will have 0.33, while we assign the additional weight to COURSE = 0.67 
-			unit = 100.0 / (enabledCount + 1);
-		} 
-		else {
-			unit = 100.0 / enabledCount;
-		}
-
 		for (MatchingCriterion criterion : criteria) {
-			if (criterion == null) {
-				continue;
-			}
-			if (!criterion.isEnabled()) {
-				weighted.add(new MatchingCriterion(criterion.getType(), 0, false));
-			} 
-			else if (leadEnabled && criterion.getType() == CriterionType.COURSE) {
-				// Add more weight to COURSE criteria
-				weighted.add(new MatchingCriterion(criterion.getType(), unit * 2, true));
-			} 
-			else {weighted.add(new MatchingCriterion(criterion.getType(), unit, true));
+			if (criterion != null) {
+				weighted.add(new MatchingCriterion(criterion.getType(), criterion.getWeight(), criterion.isEnabled()));
 			}
 		}
-		// Return a new list with weight added to COURSE
 		return weighted;
 	}
 }
