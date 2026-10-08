@@ -53,6 +53,22 @@ public class MatchRequestService {
 		return pendingRequests;
 	}
 
+	public List<MatchRequest> findOutgoingPendingFor(String studentId) {
+		if (studentId == null) return List.of();
+
+		List<MatchRequest> senderRequests = matchRequestRepository.findBySenderId(studentId);
+		List<MatchRequest> pendingRequests = new ArrayList<>();
+
+		for (int i = 0; i < senderRequests.size(); i++) {
+			MatchRequest req = senderRequests.get(i);
+
+			if (req.isPending()) {
+				pendingRequests.add(req);
+			}
+		}
+		return pendingRequests;
+	}
+
 	public MatchRequest send(String senderId, String recipientId, String message) {
 		if (senderId == null || recipientId == null) {
 			throw new IllegalArgumentException("Sender and recipient IDs must not be null");
@@ -60,6 +76,30 @@ public class MatchRequestService {
 		if (senderId.equals(recipientId)) {
 			throw new IllegalArgumentException("Cannot send match request to yourself");
 		}
+
+		List<StudyBuddyConnection> activeConnections = connectionRepository.findActiveByStudentId(senderId);
+		for (int i = 0; i < activeConnections.size(); i++) {
+			if (activeConnections.get(i).involves(recipientId)) {
+				throw new IllegalStateException("You are already connected with this study buddy");
+			}
+		}
+
+		List<MatchRequest> outgoing = matchRequestRepository.findBySenderId(senderId);
+		for (int i = 0; i < outgoing.size(); i++) {
+			MatchRequest req = outgoing.get(i);
+			if (recipientId.equals(req.getRecipientId()) && req.isPending()) {
+				throw new IllegalStateException("A pending match request has already been sent to this student");
+			}
+		}
+
+		List<MatchRequest> incoming = matchRequestRepository.findByRecipientId(senderId);
+		for (int i = 0; i < incoming.size(); i++) {
+			MatchRequest req = incoming.get(i);
+			if (senderId.equals(req.getRecipientId()) && recipientId.equals(req.getSenderId()) && req.isPending()) {
+				throw new IllegalStateException("This student has already sent you a match request. Check your incoming requests!");
+			}
+		}
+
 		MatchRequest request = new MatchRequest();
 		request.setSenderId(senderId);
 		request.setRecipientId(recipientId);

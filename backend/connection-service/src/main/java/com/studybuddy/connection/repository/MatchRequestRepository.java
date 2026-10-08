@@ -43,6 +43,22 @@ public class MatchRequestRepository {
 		return matchingRequests;
 	}
 
+	public List<MatchRequest> findBySenderId(String senderId) {
+		if (senderId == null) return List.of();
+
+		List<MatchRequest> allRequests = new ArrayList<>(storage.values());
+		List<MatchRequest> matchingRequests = new ArrayList<>();
+
+		for (int i = 0; i < allRequests.size(); i++) {
+			MatchRequest req = allRequests.get(i);
+
+			if (senderId.equals(req.getSenderId())) {
+				matchingRequests.add(req);
+			}
+		}
+		return matchingRequests;
+	}
+
 	public MatchRequest save(MatchRequest request) {
 		if (request == null) return null;
 		if (request.getRequestId() == null || request.getRequestId().trim().isEmpty()) {
