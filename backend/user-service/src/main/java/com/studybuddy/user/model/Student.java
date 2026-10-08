@@ -19,9 +19,6 @@ public class Student extends User {
 	private GroupSizePreference groupSizePreference;
 	private ArrayList<StudyGoal> studyGoals = new ArrayList<>();
 
-	public Student() {
-	}
-
 	/**
 	 * The UML draws this with no parameters, which cannot do anything. It takes
 	 * the fields a student can edit.
@@ -140,17 +137,23 @@ public class Student extends User {
 		return a.getCourseCode() != null && a.getCourseCode().equalsIgnoreCase(b.getCourseCode());
 	}
 
-	// addIfAbsent adds a course to a list only if the course is valid and not already in the list. Helper method.
+	// addIfAbsent adds a course to a list only if the course is valid and not already in the list. 
+	// Helper method.
 	private static void addIfAbsent(ArrayList<Course> courses, Course course) {
+		// Check if course is null, missing course code or course code is empty / only spaces
 		if (course == null || course.getCourseCode() == null || course.getCourseCode().isBlank())
 			throw new IllegalArgumentException("course with a course code is required");
+		// Checking if existing course have the same code as the new one
+		// If true, no existing course matches the new one
 		if (courses.stream().noneMatch(existing -> sameCourse(existing, course)))
 			courses.add(course);
 	}
 
 	// helper method with removal of course
 	private static void removeMatching(ArrayList<Course> courses, Course course) {
+		// Ignore null
 		if (course == null) return;
+		// goes through the list and deletes every course for which the lambda returns true
 		courses.removeIf(existing -> sameCourse(existing, course));
 	}
 
