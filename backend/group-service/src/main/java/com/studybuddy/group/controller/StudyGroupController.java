@@ -1,94 +1,37 @@
 package com.studybuddy.group.controller;
 
+import com.studybuddy.group.dto.*;
 import com.studybuddy.group.model.GroupJoinRequest;
-import com.studybuddy.group.model.StudyGroup;
 import com.studybuddy.group.service.StudyGroupService;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
+import jakarta.validation.Valid;
+import org.springframework.http.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.*;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/groups")
 public class StudyGroupController {
-
-	private final StudyGroupService studyGroupService;
-
-	public StudyGroupController(StudyGroupService studyGroupService) {
-		this.studyGroupService = studyGroupService;
-	}
-
-	@GetMapping
-	public List<StudyGroup> findAll() {
-		return studyGroupService.findAll();
-	}
-
-	@GetMapping("/{groupId}")
-	public StudyGroup findById(@PathVariable String groupId) {
-		return studyGroupService.findById(groupId);
-	}
-
-	@PostMapping
-	public ResponseEntity<StudyGroup> create(@RequestParam String groupName,
-											 @RequestParam String courseCode,
-											 @RequestParam String leaderId,
-											 @RequestParam(defaultValue = "5") int maxGroupSize) {
-		StudyGroup created = studyGroupService.create(groupName, courseCode, leaderId, maxGroupSize);
-		return ResponseEntity.status(HttpStatus.CREATED).body(created);
-	}
-
-	@PutMapping("/{groupId}")
-	public StudyGroup updateGroupInfo(@PathVariable String groupId,
-									  @RequestParam String leaderId,
-									  @RequestParam String groupName,
-									  @RequestParam(required = false) String description,
-									  @RequestParam int maxGroupSize) {
-		return studyGroupService.updateGroupInfo(groupId, leaderId, groupName, description, maxGroupSize);
-	}
-
-	@PostMapping("/{groupId}/close")
-	public ResponseEntity<Void> close(@PathVariable String groupId, @RequestParam String leaderId) {
-		studyGroupService.close(groupId, leaderId);
-		return ResponseEntity.noContent().build();
-	}
-
-	@DeleteMapping("/{groupId}/members/{memberId}")
-	public ResponseEntity<Void> removeMember(@PathVariable String groupId,
-											 @PathVariable String memberId,
-											 @RequestParam String leaderId) {
-		studyGroupService.removeMember(groupId, leaderId, memberId);
-		return ResponseEntity.noContent().build();
-	}
-
-	@GetMapping("/{groupId}/join-requests")
-	public List<GroupJoinRequest> findJoinRequests(@PathVariable String groupId) {
-		return studyGroupService.findJoinRequests(groupId);
-	}
-
-	@PostMapping("/{groupId}/join-requests")
-	public ResponseEntity<GroupJoinRequest> requestToJoin(@PathVariable String groupId,
-														  @RequestParam String studentId) {
-		GroupJoinRequest created = studyGroupService.requestToJoin(groupId, studentId);
-		return ResponseEntity.status(HttpStatus.CREATED).body(created);
-	}
-
-	@PostMapping("/join-requests/{requestId}/accept")
-	public GroupJoinRequest acceptJoinRequest(@PathVariable String requestId,
-											  @RequestParam String leaderId) {
-		return studyGroupService.acceptJoinRequest(requestId, leaderId);
-	}
-
-	@PostMapping("/join-requests/{requestId}/reject")
-	public GroupJoinRequest rejectJoinRequest(@PathVariable String requestId,
-											  @RequestParam String leaderId) {
-		return studyGroupService.rejectJoinRequest(requestId, leaderId);
-	}
+    private final StudyGroupService service;
+    public StudyGroupController(StudyGroupService service) { this.service=service; }
+    private String actor(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("uid")).toString(); }
+    @GetMapping public List<GroupView> all(@AuthenticationPrincipal Jwt jwt,@RequestParam(defaultValue="discover") String scope) { return service.findAll(actor(jwt),scope); }
+    @GetMapping("/{id}") public GroupView one(@PathVariable UUID id,@AuthenticationPrincipal Jwt jwt) { return service.findById(id.toString(),actor(jwt)); }
+    @PostMapping public ResponseEntity<GroupView> create(@RequestBody @Valid GroupInput input,@AuthenticationPrincipal Jwt jwt) {
+        String id=service.create(input,actor(jwt)); return ResponseEntity.status(HttpStatus.CREATED).body(service.findById(id,actor(jwt)));
+    }
+    @PutMapping("/{id}") public GroupView update(@PathVariable UUID id,@RequestBody @Valid GroupInput input,@AuthenticationPrincipal Jwt jwt) {
+        service.update(id.toString(),actor(jwt),input); return service.findById(id.toString(),actor(jwt));
+    }
+    @PostMapping("/{id}/close") @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void close(@PathVariable UUID id,@AuthenticationPrincipal Jwt jwt) { service.close(id.toString(),actor(jwt)); }
+    @DeleteMapping("/{id}/members/{memberId}") @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void remove(@PathVariable UUID id,@PathVariable UUID memberId,@AuthenticationPrincipal Jwt jwt) { service.removeMember(id.toString(),actor(jwt),memberId.toString()); }
+    @PostMapping("/{id}/join-requests") @ResponseStatus(HttpStatus.CREATED)
+    public GroupJoinRequest join(@PathVariable UUID id,@AuthenticationPrincipal Jwt jwt) { return service.requestToJoin(id.toString(),actor(jwt)); }
+    @GetMapping("/{id}/join-requests") public List<JoinRequestView> requests(@PathVariable UUID id,@AuthenticationPrincipal Jwt jwt) { return service.findJoinRequests(id.toString(),actor(jwt)); }
+    @GetMapping("/join-requests/mine") public List<JoinRequestView> mine(@AuthenticationPrincipal Jwt jwt) { return service.myRequests(actor(jwt)); }
+    @PostMapping("/join-requests/{id}/accept") public GroupJoinRequest accept(@PathVariable UUID id,@AuthenticationPrincipal Jwt jwt) { return service.decide(id.toString(),actor(jwt),true); }
+    @PostMapping("/join-requests/{id}/reject") public GroupJoinRequest reject(@PathVariable UUID id,@AuthenticationPrincipal Jwt jwt) { return service.decide(id.toString(),actor(jwt),false); }
 }
