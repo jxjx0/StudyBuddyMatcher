@@ -68,8 +68,8 @@ public class DemoDataSeeder implements CommandLineRunner {
 		}
 		for (int i = 1; i <= 50; i++) {
 			String email = String.format("student%02d@smu.edu.sg", i);
-			Student student = users.findByEmail(email).filter(Student.class::isInstance).map(Student.class::cast).orElseGet(Student::new);
-			if (student.getUserId() == null) { student.setEmail(email); student.setPasswordHash(passwords.encode(studentPassword)); }
+			Student student = users.findByEmail(email).filter(Student.class::isInstance).map(Student.class::cast)
+					.orElseGet(() -> new Student(null, email, passwords.encode(studentPassword), AccountStatus.ACTIVE));
 			student.setAccountStatus(AccountStatus.ACTIVE); student.setName(STUDENT_NAMES.get(i - 1));
 			student.setSchool(SCHOOLS.get((i - 1) % SCHOOLS.size()));
 			student.setProgramme(switch ((i - 1) % SCHOOLS.size()) {

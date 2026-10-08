@@ -4,6 +4,7 @@ import com.studybuddy.user.dto.CourseDto;
 import com.studybuddy.user.dto.StudentContactDto;
 import com.studybuddy.user.dto.StudentDto;
 import com.studybuddy.user.dto.StudentRequest;
+import com.studybuddy.user.model.AccountStatus;
 import com.studybuddy.user.model.Course;
 import com.studybuddy.user.model.Student;
 import com.studybuddy.user.model.User;
@@ -45,9 +46,7 @@ public class StudentService {
 
 	@Transactional
 	public StudentDto create(StudentRequest request) {
-		Student student = new Student();
-		student.setEmail(request.getEmail());
-		student.setPasswordHash(request.getPassword());
+		Student student = new Student(null, request.getEmail(), request.getPassword(), AccountStatus.ACTIVE);
 		apply(student, request);
 		Student created = (Student) accounts.create(student);
 		studentRepository.save(created);

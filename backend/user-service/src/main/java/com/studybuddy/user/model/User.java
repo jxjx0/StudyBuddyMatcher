@@ -4,16 +4,14 @@ import java.util.Locale;
 import java.util.Objects;
 
 /** Base account shared by students and system administrators. */
-public class User {
+public abstract class User {
 
 	private String userId;
 	private String email;
 	private String passwordHash;
 	private AccountStatus accountStatus = AccountStatus.ACTIVE;
 
-	public User() { }
-
-	public User(String userId, String email, String passwordHash, AccountStatus accountStatus) {
+	protected User(String userId, String email, String passwordHash, AccountStatus accountStatus) {
 		this.userId = userId;
 		setEmail(email);
 		this.passwordHash = passwordHash;
@@ -33,5 +31,4 @@ public class User {
 	public void setAccountStatus(AccountStatus accountStatus) {
 		this.accountStatus = Objects.requireNonNull(accountStatus, "accountStatus is required");
 	}
-	public void changeAccountStatus(AccountStatus status) { setAccountStatus(status); }
 }
