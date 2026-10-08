@@ -14,10 +14,16 @@ const {
   filteredStudents,
   loadStudents,
 } = useAppState();
-const { sendMatchRequest } = useConnections();
+const {
+  outgoingRequests,
+  activeConnections,
+  sendMatchRequest,
+} = useConnections();
 const router = useRouter();
 const loading = ref(false);
 const error = ref("");
+const sendingRequestIds = ref(new Set());
+const sentRequestIds = ref(new Set());
 const page = ref(1);
 const pageSize = 10;
 const pageCount = computed(() =>
@@ -63,6 +69,35 @@ function resetFilters() {
 }
 function viewProfile(id) {
   router.push({ name: "student-public-profile", query: { id } });
+}
+function requestStatus(studentId) {
+  if (
+    activeConnections.value.some(
+      (connection) =>
+        connection.studentAId === studentId ||
+        connection.studentBId === studentId,
+    )
+  )
+    return "Connected";
+  if (
+    sentRequestIds.value.has(studentId) ||
+    outgoingRequests.value.some((request) => request.recipientId === studentId)
+  )
+    return "Request Sent";
+  return "Connect";
+}
+async function connect(studentId) {
+  if (sendingRequestIds.value.has(studentId) || requestStatus(studentId) !== "Connect")
+    return;
+  sendingRequestIds.value = new Set(sendingRequestIds.value).add(studentId);
+  try {
+    if (await sendMatchRequest(studentId))
+      sentRequestIds.value = new Set(sentRequestIds.value).add(studentId);
+  } finally {
+    const pending = new Set(sendingRequestIds.value);
+    pending.delete(studentId);
+    sendingRequestIds.value = pending;
+  }
 }
 onMounted(refresh);
 onBeforeRouteLeave(() => {
@@ -203,8 +238,19 @@ onBeforeRouteLeave(() => {
             >
               View profile
             </button>
-            <button class="primary-button" @click="sendMatchRequest(student.id)">
-              Connect
+            <button
+              class="primary-button"
+              :disabled="
+                sendingRequestIds.has(student.id) ||
+                requestStatus(student.id) !== 'Connect'
+              "
+              @click="connect(student.id)"
+            >
+              {{
+                sendingRequestIds.has(student.id)
+                  ? "Sending…"
+                  : requestStatus(student.id)
+              }}
             </button>
           </div>
         </article>

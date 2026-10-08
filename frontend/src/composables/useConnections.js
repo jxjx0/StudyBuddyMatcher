@@ -11,21 +11,14 @@ const error = ref("");
 const unreadConnectionUpdates = ref(0);
 const notificationStateByStudent = new Map();
 
-function updateNotificationState(studentId, incoming, connections) {
+function updateNotificationState(studentId, incoming) {
   const incomingIds = new Set(incoming.map((request) => request.requestId));
-  const connectionIds = new Set(
-    connections.map((connection) => connection.connectionId),
-  );
   let state = notificationStateByStudent.get(studentId);
 
   if (!state) {
     state = {
       incomingIds,
-      connectionIds,
-      unreadIds: new Set([
-        ...[...incomingIds].map((id) => `request:${id}`),
-        ...[...connectionIds].map((id) => `connection:${id}`),
-      ]),
+      unreadIds: new Set(),
     };
     notificationStateByStudent.set(studentId, state);
   } else {
@@ -37,12 +30,7 @@ function updateNotificationState(studentId, incoming, connections) {
       if (!incomingIds.has(requestId))
         state.unreadIds.delete(`request:${requestId}`);
     }
-    for (const connectionId of connectionIds) {
-      if (!state.connectionIds.has(connectionId))
-        state.unreadIds.add(`connection:${connectionId}`);
-    }
     state.incomingIds = incomingIds;
-    state.connectionIds = connectionIds;
   }
 
   if (user.value?.userId === studentId)
@@ -62,12 +50,11 @@ async function checkForConnectionUpdates() {
   if (!studentId) return false;
   try {
     const encodedId = encodeURIComponent(studentId);
-    const [incoming, connections] = await Promise.all([
-      api(`/api/match-requests/pending?studentId=${encodedId}`),
-      api(`/api/connections?studentId=${encodedId}`),
-    ]);
+    const incoming = await api(
+      `/api/match-requests/pending?studentId=${encodedId}`,
+    );
     if (user.value?.userId !== studentId) return false;
-    updateNotificationState(studentId, incoming, connections);
+    updateNotificationState(studentId, incoming);
     return true;
   } catch (problem) {
     console.error("Could not check for connection updates.", problem);
@@ -124,7 +111,7 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
     incomingRequests.value = loadedIncoming;
     outgoingRequests.value = loadedOutgoing;
     activeConnections.value = loadedConnections;
-    updateNotificationState(currentStudentId, loadedIncoming, loadedConnections);
+    updateNotificationState(currentStudentId, loadedIncoming);
     return true;
   } catch (problem) {
     error.value = `Could not load requests and connections: ${problem.message}`;
@@ -145,11 +132,13 @@ async function sendMatchRequest(recipientId, message = "") {
     await loadConnectionsAndRequests();
     if (error.value) {
       toast("Request sent, but the connections list could not be refreshed.", "error");
-      return;
+      return true;
     }
     toast("Match request sent!");
+    return true;
   } catch (problem) {
     toast(`Could not send match request: ${problem.message}`, "error");
+    return false;
   }
 }
 
