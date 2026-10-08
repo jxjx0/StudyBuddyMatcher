@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Storage for study buddy connections. Stubbed - nothing is stored yet.
@@ -30,9 +29,18 @@ public class StudyBuddyConnectionRepository {
 
 	public List<StudyBuddyConnection> findActiveByStudentId(String studentId) {
 		if (studentId == null) return List.of();
-		return storage.values().stream()
-				.filter(conn -> conn.isActive() && conn.involves(studentId))
-				.collect(Collectors.toList());
+
+		List<StudyBuddyConnection> allConnections = new ArrayList<>(storage.values());
+		List<StudyBuddyConnection> activeConnections = new ArrayList<>();
+
+		for (int i = 0; i < allConnections.size(); i++) {
+			StudyBuddyConnection conn = allConnections.get(i);
+
+			if (conn.isActive() && conn.involves(studentId)) {
+				activeConnections.add(conn);
+			}
+		}
+		return activeConnections;
 	}
 
 	public StudyBuddyConnection save(StudyBuddyConnection connection) {

@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Storage for match requests. Stubbed - nothing is stored yet.
@@ -30,9 +29,18 @@ public class MatchRequestRepository {
 
 	public List<MatchRequest> findByRecipientId(String recipientId) {
 		if (recipientId == null) return List.of();
-		return storage.values().stream()
-				.filter(req -> recipientId.equals(req.getRecipientId()))
-				.collect(Collectors.toList());
+
+		List<MatchRequest> allRequests = new ArrayList<>(storage.values());
+		List<MatchRequest> matchingRequests = new ArrayList<>();
+
+		for (int i = 0; i < allRequests.size(); i++) {
+			MatchRequest req = allRequests.get(i);
+			
+			if (recipientId.equals(req.getRecipientId())) {
+				matchingRequests.add(req);
+			}
+		}
+		return matchingRequests;
 	}
 
 	public MatchRequest save(MatchRequest request) {
