@@ -9,7 +9,9 @@ spring:
     username: ${SUPABASE_DB_USER:postgres}
     password: ${SUPABASE_DB_PASSWORD:postgres}
     hikari:
-      maximum-pool-size: ${DB_POOL_SIZE:5}
+      maximum-pool-size: ${DB_POOL_SIZE:2}
+      minimum-idle: ${DB_MIN_IDLE:0}
+      idle-timeout: 60000
   sql:
     init:
       mode: never
