@@ -12,6 +12,11 @@ public class Student extends User {
 	private String programme;
 	private int yearOfStudy;
 	private String contactNumber;
+
+	public Student(String userId, String email, String passwordHash, AccountStatus accountStatus) {
+		super(userId, email, passwordHash, accountStatus);
+	}
+
 	private ArrayList<Course> currentCourses = new ArrayList<>();
 	private ArrayList<Course> coursesForStudying = new ArrayList<>();
 	private MeetingMode meetingMode;

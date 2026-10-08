@@ -52,7 +52,10 @@ public class AdminController {
 		User account;
 		if ("ADMIN".equalsIgnoreCase(request.role())) account = new SystemAdministrator(null, request.email(), request.password(), request.name());
 		else if ("STUDENT".equalsIgnoreCase(request.role())) {
-			Student student = new Student(); student.setEmail(request.email()); student.setPasswordHash(request.password()); student.setName(request.name()); student.setSchool(request.school()); account = student;
+			Student student = new Student(null, request.email(), request.password(), AccountStatus.ACTIVE);
+			student.setName(request.name());
+			student.setSchool(request.school());
+			account = student;
 		} else throw new IllegalArgumentException("role must be STUDENT or ADMIN");
 		return ResponseEntity.status(HttpStatus.CREATED).body(AccountResponse.from(userAccountService.createUserAccount(account)));
 	}

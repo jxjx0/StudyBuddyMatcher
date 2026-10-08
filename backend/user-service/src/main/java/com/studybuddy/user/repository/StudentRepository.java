@@ -110,10 +110,10 @@ public class StudentRepository {
 	}
 
 	private Student mapStudent(ResultSet rs, Map<UUID, Course> courses) throws SQLException {
-		Student student = new Student();
-		student.setUserId(rs.getString("user_id"));
-		student.setEmail(rs.getString("email"));
-		student.setAccountStatus(AccountStatus.valueOf(rs.getString("account_status")));
+		String userId = rs.getString("user_id");
+		String email = rs.getString("email");
+		AccountStatus accountStatus = AccountStatus.valueOf(rs.getString("account_status"));
+		Student student = new Student(userId, email, null, accountStatus);
 		student.setName(rs.getString("name"));
 		student.setSchool(rs.getString("school"));
 		student.setProgramme(rs.getString("programme"));
