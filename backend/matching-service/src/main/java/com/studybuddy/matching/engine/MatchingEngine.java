@@ -1,5 +1,6 @@
 package com.studybuddy.matching.engine;
 
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -245,18 +246,50 @@ public class MatchingEngine {
 	}
 
 	private int totalOverlapMinutes(StudentDto a, StudentDto b) {
+		// Merged first, so a student's own overlapping slots cannot count the same time twice.
+		List<TimeSlot> slotsB = mergeSlots(b.getWeeklyAvailability());
 		int total = 0;
-		for (TimeSlot slotA : a.getWeeklyAvailability()) {
-			if (slotA == null) {
-				continue;
-			}
-			for (TimeSlot slotB : b.getWeeklyAvailability()) {
-				if (slotB != null) {
-					total += slotA.overlapMinutes(slotB);
-				}
+		for (TimeSlot slotA : mergeSlots(a.getWeeklyAvailability())) {
+			for (TimeSlot slotB : slotsB) {
+				total += slotA.overlapMinutes(slotB);
 			}
 		}
 		return total;
+	}
+
+	/**
+	 * Joins one student's overlapping or touching slots on the same day, for
+	 * example Mon 16:00-18:00 and Mon 17:00-19:00 become Mon 16:00-19:00.
+	 * Slots with a missing day or time, or that end before they start, are left out.
+	 */
+	private List<TimeSlot> mergeSlots(List<TimeSlot> slots) {
+		List<TimeSlot> valid = new ArrayList<>();
+		if (slots != null) {
+			for (TimeSlot slot : slots) {
+				if (slot != null && slot.getDay() != null && slot.getStartTime() != null
+						&& slot.getEndTime() != null && slot.getEndTime().isAfter(slot.getStartTime())) {
+					valid.add(slot);
+				}
+			}
+		}
+		valid.sort(Comparator.comparing((TimeSlot slot) -> slot.getDay().toUpperCase())
+				.thenComparing(TimeSlot::getStartTime));
+
+		List<TimeSlot> merged = new ArrayList<>();
+		TimeSlot current = null;
+		for (TimeSlot slot : valid) {
+			boolean sameDay = current != null && current.getDay().equalsIgnoreCase(slot.getDay());
+			if (sameDay && !slot.getStartTime().isAfter(current.getEndTime())) {
+				// Starts before the current slot ends: stretch the current slot instead of adding another.
+				LocalTime end = slot.getEndTime().isAfter(current.getEndTime()) ? slot.getEndTime() : current.getEndTime();
+				current = new TimeSlot(current.getDay(), current.getStartTime(), end);
+				merged.set(merged.size() - 1, current);
+			} else {
+				current = new TimeSlot(slot.getDay(), slot.getStartTime(), slot.getEndTime());
+				merged.add(current);
+			}
+		}
+		return merged;
 	}
 
 	private Set<String> courseCodes(List<CourseDto> courses) {
