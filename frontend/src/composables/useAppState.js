@@ -381,15 +381,18 @@ async function signIn(email, password) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    // While the backend is down or still starting, the gateway/dev proxy answers with an empty body.
     const session = await response.json().catch(() => null);
-    if (!session)
+    if (response.status === 401)
       throw new Error(
-        "The server is not responding. It may still be starting up, so try again in a moment.",
+        "Unable to log in. Check your email and password, and make sure the account is active.",
       );
     if (!response.ok)
       throw new Error(
-        session.message || "Unable to log in. Check your email and password.",
+        session?.message || `Login failed (${response.status}). Please try again.`,
+      );
+    if (!session)
+      throw new Error(
+        "The server returned an invalid response. Please try again.",
       );
     if (session.user.role.toLowerCase() !== loginRole.value)
       throw new Error(
@@ -412,12 +415,17 @@ async function signUp(details) {
       body: JSON.stringify(details),
     });
     const session = await response.json().catch(() => null);
+    if (!response.ok)
+      throw new Error(
+        session?.message ||
+          (response.status === 409
+            ? "An account with this email already exists. Use another email or log in."
+            : `Unable to create your account (${response.status}). Please try again.`),
+      );
     if (!session)
       throw new Error(
-        "The server is not responding. It may still be starting up, so try again in a moment.",
+        "The server returned an invalid response. Please try again.",
       );
-    if (!response.ok)
-      throw new Error(session.message || "Unable to create your account.");
     loginRole.value = "student";
     saveSession(session);
     await loadAppData();
