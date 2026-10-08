@@ -25,7 +25,7 @@ const {
 <template>
   <section class="page-body narrow-page">
     <header class="page-heading">
-      <h1>My study profile</h1>
+      <h1>My Profile</h1>
       <p>Help other students find you. Your contact number stays private.</p>
     </header>
     <p v-if="dataLoading" role="status">Loading your profile…</p>

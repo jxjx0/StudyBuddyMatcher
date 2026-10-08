@@ -302,22 +302,22 @@ const nav = computed(() =>
   userRole.value === "admin"
     ? [
         {
-          label: "Admin dashboard",
+          label: "Admin Dashboard",
           path: "admin/dashboard",
           icon: ShieldCheck,
         },
-        { label: "User accounts", path: "admin/users", icon: Users },
+        { label: "User Accounts", path: "admin/users", icon: Users },
         {
-          label: "Matching configuration",
+          label: "Matching Configuration",
           path: "admin/matching",
           icon: Sparkles,
         },
       ]
     : [
-        { label: "Discover buddies", path: "student/discover", icon: Sparkles },
-        { label: "My connections", path: "student/connections", icon: Users },
-        { label: "Study groups", path: "student/groups", icon: Users },
-        { label: "My profile", path: "student/profile", icon: GraduationCap },
+        { label: "Discover Buddies", path: "student/discover", icon: Sparkles },
+        { label: "My Connections", path: "student/connections", icon: Users },
+        { label: "Study Groups", path: "student/groups", icon: Users },
+        { label: "My Profile", path: "student/profile", icon: GraduationCap },
       ],
 );
 

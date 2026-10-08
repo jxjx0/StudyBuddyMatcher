@@ -17,8 +17,8 @@ const route = useRoute();
 const menuOpen = ref(false);
 const displayName = computed(() => user.value?.name || "StudyBuds member");
 const currentLabel = computed(() => {
-  if (route.path === "/student/availability") return "Weekly availability";
-  if (route.path === "/student/public-profile") return "Public profile";
+  if (route.path === "/student/availability") return "Weekly Availability";
+  if (route.path === "/student/public-profile") return "Public Profile";
   return (
     nav.value.find((item) => route.path === "/" + item.path)?.label ||
     "StudyBuds"
@@ -77,7 +77,7 @@ onScopeDispose(() => {
         >
       </div>
       <p class="workspace-label">
-        {{ userRole === "admin" ? "Admin console" : "My space" }}
+        {{ userRole === "admin" ? "Admin Console" : "My Space" }}
       </p>
       <AppNavigation />
       <div class="profile-mini">
@@ -99,7 +99,7 @@ onScopeDispose(() => {
           <Menu :size="22" />
         </button>
         <div class="breadcrumb">
-          <span>{{ userRole === "admin" ? "Admin console" : "My space" }}</span
+          <span>{{ userRole === "admin" ? "Admin Console" : "My Space" }}</span
           ><ChevronRight :size="14" /><strong>{{ currentLabel }}</strong>
         </div>
         <button class="text-button signout-button" @click="signOut">

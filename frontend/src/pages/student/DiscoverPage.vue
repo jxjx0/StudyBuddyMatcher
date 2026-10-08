@@ -73,7 +73,7 @@ onBeforeRouteLeave(() => {
 <template>
   <section class="page-body">
     <header class="page-heading">
-      <h1>Discover study buddies</h1>
+      <h1>Discover Study Buddies</h1>
       <p>Find students who share your courses, goals and study style.</p>
     </header>
     <div class="filter-surface">

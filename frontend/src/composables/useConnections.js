@@ -107,8 +107,16 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
               connection.studentAId === currentStudentId
                 ? connection.studentBId
                 : connection.studentAId;
-            const partner = await api(`/api/students/${partnerId}`);
-            return { ...connection, partnerName: partner.name };
+            const [partner, contact] = await Promise.all([
+              api(`/api/students/${partnerId}`),
+              api(`/api/connections/${connection.connectionId}/contact`),
+            ]);
+            return {
+              ...connection,
+              partnerName: partner.name,
+              partnerEmail: contact.email,
+              partnerContactNumber: contact.contactNumber,
+            };
           }),
         ),
       ]);
