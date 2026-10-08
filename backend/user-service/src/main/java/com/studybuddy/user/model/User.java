@@ -11,8 +11,6 @@ public class User {
 	private String passwordHash;
 	private AccountStatus accountStatus = AccountStatus.ACTIVE;
 
-	public User() { }
-
 	public User(String userId, String email, String passwordHash, AccountStatus accountStatus) {
 		this.userId = userId;
 		setEmail(email);
