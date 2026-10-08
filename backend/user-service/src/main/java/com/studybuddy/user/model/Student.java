@@ -19,9 +19,6 @@ public class Student extends User {
 	private GroupSizePreference groupSizePreference;
 	private ArrayList<StudyGoal> studyGoals = new ArrayList<>();
 
-	public Student() {
-	}
-
 	/**
 	 * The UML draws this with no parameters, which cannot do anything. It takes
 	 * the fields a student can edit.
