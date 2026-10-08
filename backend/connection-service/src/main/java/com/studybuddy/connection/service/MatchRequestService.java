@@ -1,9 +1,13 @@
 package com.studybuddy.connection.service;
 
+import com.studybuddy.connection.client.StudentClient;
+import com.studybuddy.connection.dto.StudentContactDto;
 import com.studybuddy.connection.model.MatchRequest;
 import com.studybuddy.connection.model.StudyBuddyConnection;
 import com.studybuddy.connection.repository.MatchRequestRepository;
 import com.studybuddy.connection.repository.StudyBuddyConnectionRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -21,11 +25,14 @@ public class MatchRequestService {
 
 	private final MatchRequestRepository matchRequestRepository;
 	private final StudyBuddyConnectionRepository connectionRepository;
+	private final StudentClient studentClient;
 
 	public MatchRequestService(MatchRequestRepository matchRequestRepository,
-							   StudyBuddyConnectionRepository connectionRepository) {
+							   StudyBuddyConnectionRepository connectionRepository,
+							   StudentClient studentClient) {
 		this.matchRequestRepository = matchRequestRepository;
 		this.connectionRepository = connectionRepository;
+		this.studentClient = studentClient;
 	}
 
 	public List<MatchRequest> findAll() {
@@ -135,6 +142,17 @@ public class MatchRequestService {
 
 	public List<StudyBuddyConnection> findActiveConnections(String studentId) {
 		return connectionRepository.findActiveByStudentId(studentId);
+	}
+
+	public StudentContactDto findActiveConnectionContact(String connectionId, String requesterId) {
+		StudyBuddyConnection connection = connectionRepository.findById(connectionId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+		if (!connection.isActive() || !connection.involves(requesterId)) {
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+		}
+		String otherStudentId = connection.getOtherStudentId(requesterId);
+		if (otherStudentId == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+		return studentClient.findContactDetails(otherStudentId);
 	}
 
 	public void endConnection(String connectionId, String requesterId) {

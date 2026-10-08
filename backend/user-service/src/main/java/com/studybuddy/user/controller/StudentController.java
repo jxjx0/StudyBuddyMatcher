@@ -5,6 +5,7 @@ import com.studybuddy.user.dto.StudentDto;
 import com.studybuddy.user.dto.StudentRequest;
 import com.studybuddy.user.service.StudentService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,6 +21,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * Student profile endpoints.
@@ -32,9 +36,14 @@ import java.util.List;
 public class StudentController {
 
 	private final StudentService studentService;
+	private final byte[] contactServiceSecret;
 
-	public StudentController(StudentService studentService) {
+	public StudentController(StudentService studentService,
+			@Value("${app.contact.service-secret:}") String contactServiceSecret) {
 		this.studentService = studentService;
+		if (contactServiceSecret == null || contactServiceSecret.getBytes(StandardCharsets.UTF_8).length < 32)
+			throw new IllegalStateException("CONTACT_SERVICE_SECRET must contain at least 32 characters");
+		this.contactServiceSecret = contactServiceSecret.getBytes(StandardCharsets.UTF_8);
 	}
 
 	@GetMapping
@@ -48,16 +57,24 @@ public class StudentController {
 	}
 
 	/**
-	 * Contact details for a matched student. Called by connection-service once
-	 * a match request has been accepted, not by the browser.
-	 *
 	 * A student can read their own number; administrators can assist with account
-	 * management. Connection-service integration can add accepted-match access.
+	 * management.
 	 */
 	@GetMapping("/{userId}/contact")
 	public StudentContactDto findContactDetails(@PathVariable String userId, @AuthenticationPrincipal Jwt jwt) {
 		if (!isAdmin(jwt) && !userId.equals(jwt.getClaimAsString("uid"))) {
 			throw new AccessDeniedException("You can only view your own contact details");
+		}
+		return studentService.findContactDetails(userId);
+	}
+
+	@GetMapping("/internal/{userId}/contact")
+	public StudentContactDto findContactDetailsForConnectionService(
+			@PathVariable String userId,
+			@RequestHeader(value = "X-Contact-Service-Secret", required = false) String suppliedSecret) {
+		if (suppliedSecret == null || !MessageDigest.isEqual(contactServiceSecret,
+				suppliedSecret.getBytes(StandardCharsets.UTF_8))) {
+			throw new AccessDeniedException("Invalid contact-service credentials");
 		}
 		return studentService.findContactDetails(userId);
 	}

@@ -1,7 +1,10 @@
 package com.studybuddy.connection.controller;
 
+import com.studybuddy.connection.dto.StudentContactDto;
 import com.studybuddy.connection.model.StudyBuddyConnection;
 import com.studybuddy.connection.service.MatchRequestService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +31,13 @@ public class ConnectionController {
 	@GetMapping
 	public List<StudyBuddyConnection> findActive(@RequestParam String studentId) {
 		return matchRequestService.findActiveConnections(studentId);
+	}
+
+	@GetMapping("/{connectionId}/contact")
+	public StudentContactDto findPartnerContact(@PathVariable String connectionId,
+												@AuthenticationPrincipal Jwt jwt) {
+		return matchRequestService.findActiveConnectionContact(
+				connectionId, jwt.getClaimAsString("uid"));
 	}
 
 	@DeleteMapping("/{connectionId}")
