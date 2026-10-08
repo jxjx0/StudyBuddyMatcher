@@ -16,6 +16,7 @@ SUPABASE_JDBC_URL=jdbc:postgresql://<pooler-host>:6543/postgres?sslmode=require&
 SUPABASE_DB_USER=<username from Supabase Connect>
 SUPABASE_DB_PASSWORD=<database password>
 JWT_SECRET=<at least 32 random characters; use the same value for gateway and user-service>
+CONTACT_SERVICE_SECRET=<a different random secret of at least 32 characters; use the same value for user-service and connection-service>
 DB_POOL_SIZE=2
 DB_MIN_IDLE=0
 DEMO_DATA_ENABLED=false
@@ -28,7 +29,7 @@ See [Supabase connection modes](https://supabase.com/docs/guides/database/connec
 
 This backend uses the PostgreSQL connection directly, so it does **not** need the Supabase project URL, anon/publishable key, or service-role key. The database password is the credential used by the backend. Never put the database password or service-role key in the frontend.
 
-`SUPABASE_JDBC_URL`, `SUPABASE_DB_USER`, and `SUPABASE_DB_PASSWORD` have local-only fallback values for a local PostgreSQL database. For Supabase, replace them with the values above. `JWT_SECRET` has no insecure fallback; both apps fail to start if it is missing or shorter than 32 characters.
+`SUPABASE_JDBC_URL`, `SUPABASE_DB_USER`, and `SUPABASE_DB_PASSWORD` have local-only fallback values for a local PostgreSQL database. For Supabase, replace them with the values above. `JWT_SECRET` has no insecure fallback; the gateway, user-service, and connection-service fail to start if it is missing or shorter than 32 characters. `CONTACT_SERVICE_SECRET` must be a separate random secret shared only by user-service and connection-service; both services fail to start if it is missing or shorter than 32 characters. It protects the internal contact lookup and must never be sent to the browser.
 
 ## Demo population
 
@@ -76,5 +77,7 @@ Passwords are BCrypt hashes in the database. JWTs are stateless HS256 tokens wit
 ## Database notes
 
 The shared cloud database stores accounts in `user_accounts`, profiles in `students`, and course references in `courses`. Matching settings use `matching_configuration` and `matching_criteria`. Study groups, membership and join requests use the three group-service tables. The Java backend accesses these tables through JDBC and checks group permissions using its own authenticated user tokens.
+
+Contact information is returned to a student only through an active study buddy connection. The connection-service checks the caller's JWT and connection membership before using the internal contact endpoint in user-service. Configure `CONTACT_SERVICE_SECRET` as described above; do not expose it to the frontend.
 
 The group schema is applied explicitly. For an already configured cloud database, leave automatic schema initialization and demo seeding disabled. The separate `scripts/group-local.py` runner creates its own disposable database for tests and local demos; it does not populate or update cloud Supabase.

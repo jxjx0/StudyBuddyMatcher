@@ -53,15 +53,28 @@ public class TimeSlot {
 	 * Whether this slot shares any part of the same day and time with another.
 	 */
 	public boolean overlaps(TimeSlot other) {
-		// TODO: implement
-		return false;
+		if (other == null || this.day == null || other.getDay() == null) {
+			return false;
+		}
+		if (!this.day.equalsIgnoreCase(other.getDay())) {
+			return false;
+		}
+		if (this.startTime == null || this.endTime == null || other.getStartTime() == null || other.getEndTime() == null) {
+			return false;
+		}
+		return this.startTime.isBefore(other.getEndTime()) && this.endTime.isAfter(other.getStartTime());
 	}
 
 	/**
 	 * Length of the shared window in minutes, or 0 when the slots do not overlap.
 	 */
 	public int overlapMinutes(TimeSlot other) {
-		// TODO: implement
-		return 0;
+		if (!overlaps(other)) {
+			return 0;
+		}
+		LocalTime latestStart = this.startTime.isAfter(other.getStartTime()) ? this.startTime : other.getStartTime();
+		LocalTime earliestEnd = this.endTime.isBefore(other.getEndTime()) ? this.endTime : other.getEndTime();
+
+		return (int) java.time.Duration.between(latestStart, earliestEnd).toMinutes();
 	}
 }

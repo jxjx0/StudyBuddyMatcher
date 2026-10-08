@@ -72,16 +72,17 @@ public class MatchRequest {
 	 * job, not this object's - a request cannot build and store another object.
 	 */
 	public void accept() {
-		// TODO: implement - set status to ACCEPTED and stamp respondedAt
+		this.status = MatchRequestStatus.ACCEPTED;
+		this.respondedAt = LocalDateTime.now();
 	}
 
 	public void decline() {
-		// TODO: implement - set status to DECLINED and stamp respondedAt
+		this.status = MatchRequestStatus.DECLINED;
+		this.respondedAt = LocalDateTime.now();
 	}
 
 	public boolean isPending() {
-		// TODO: implement
-		return false;
+		return MatchRequestStatus.PENDING.equals(this.status);
 	}
 
 	/**
@@ -89,7 +90,6 @@ public class MatchRequest {
 	 * way to express who is permitted to respond.
 	 */
 	public boolean canBeRespondedBy(String studentId) {
-		// TODO: implement
-		return false;
+		return isPending() && studentId != null && studentId.equals(this.recipientId);
 	}
 }

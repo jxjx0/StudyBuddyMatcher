@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { Filter, Search } from "lucide-vue-next";
 import { useAppState } from "../../composables/useAppState";
+import { useConnections } from "../../composables/useConnections";
 import { studyGoals, labelOf } from "../../utils/studyData";
 
 const {
@@ -13,9 +14,16 @@ const {
   filteredStudents,
   loadStudents,
 } = useAppState();
+const {
+  outgoingRequests,
+  activeConnections,
+  sendMatchRequest,
+} = useConnections();
 const router = useRouter();
 const loading = ref(false);
 const error = ref("");
+const sendingRequestIds = ref(new Set());
+const sentRequestIds = ref(new Set());
 const page = ref(1);
 const pageSize = 10;
 const pageCount = computed(() =>
@@ -62,13 +70,45 @@ function resetFilters() {
 function viewProfile(id) {
   router.push({ name: "student-public-profile", query: { id } });
 }
+function requestStatus(studentId) {
+  if (
+    activeConnections.value.some(
+      (connection) =>
+        connection.studentAId === studentId ||
+        connection.studentBId === studentId,
+    )
+  )
+    return "Connected";
+  if (
+    sentRequestIds.value.has(studentId) ||
+    outgoingRequests.value.some((request) => request.recipientId === studentId)
+  )
+    return "Request Sent";
+  return "Connect";
+}
+async function connect(studentId) {
+  if (sendingRequestIds.value.has(studentId) || requestStatus(studentId) !== "Connect")
+    return;
+  sendingRequestIds.value = new Set(sendingRequestIds.value).add(studentId);
+  try {
+    if (await sendMatchRequest(studentId))
+      sentRequestIds.value = new Set(sentRequestIds.value).add(studentId);
+  } finally {
+    const pending = new Set(sendingRequestIds.value);
+    pending.delete(studentId);
+    sendingRequestIds.value = pending;
+  }
+}
 onMounted(refresh);
+onBeforeRouteLeave(() => {
+  query.value = "";
+});
 </script>
 
 <template>
   <section class="page-body">
     <header class="page-heading">
-      <h1>Discover study buddies</h1>
+      <h1>Discover Study Buddies</h1>
       <p>Find students who share your courses, goals and study style.</p>
     </header>
     <div class="filter-surface">
@@ -190,13 +230,29 @@ onMounted(refresh);
               }}</span>
             </div>
           </div>
-          <button
-            class="secondary-button"
-            :aria-label="`View ${student.name}'s public profile`"
-            @click="viewProfile(student.id)"
-          >
-            View profile
-          </button>
+          <div class="form-actions">
+            <button
+              class="secondary-button"
+              :aria-label="`View ${student.name}'s public profile`"
+              @click="viewProfile(student.id)"
+            >
+              View profile
+            </button>
+            <button
+              class="primary-button"
+              :disabled="
+                sendingRequestIds.has(student.id) ||
+                requestStatus(student.id) !== 'Connect'
+              "
+              @click="connect(student.id)"
+            >
+              {{
+                sendingRequestIds.has(student.id)
+                  ? "Sending…"
+                  : requestStatus(student.id)
+              }}
+            </button>
+          </div>
         </article>
       </div>
       <nav
@@ -216,9 +272,5 @@ onMounted(refresh);
         </button>
       </nav>
     </template>
-    <p class="feature-note">
-      Buddy requests and match scores aren’t available yet. You can join a
-      <RouterLink to="/student/groups">study group</RouterLink> today.
-    </p>
   </section>
 </template>

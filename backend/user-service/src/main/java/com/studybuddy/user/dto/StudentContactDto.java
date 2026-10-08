@@ -9,14 +9,16 @@ public class StudentContactDto {
 
 	private String userId;
 	private String name;
+	private String email;
 	private String contactNumber;
 
 	public StudentContactDto() {
 	}
 
-	public StudentContactDto(String userId, String name, String contactNumber) {
+	public StudentContactDto(String userId, String name, String email, String contactNumber) {
 		this.userId = userId;
 		this.name = name;
+		this.email = email;
 		this.contactNumber = contactNumber;
 	}
 
@@ -34,6 +36,14 @@ public class StudentContactDto {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	public String getEmail() {
+		return email;
+	}
+
+	public void setEmail(String email) {
+		this.email = email;
 	}
 
 	public String getContactNumber() {

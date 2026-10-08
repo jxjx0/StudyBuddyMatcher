@@ -41,7 +41,10 @@ public class StudentService {
 
 	public StudentContactDto findContactDetails(String userId) {
 		Student student = findStudent(userId);
-		return new StudentContactDto(student.getUserId(), student.getName(), student.getContactNumber());
+		User account = userRepository.findById(userId)
+				.orElseThrow(() -> new AccountNotFoundException("Student not found"));
+		return new StudentContactDto(student.getUserId(), student.getName(), account.getEmail(),
+				student.getContactNumber());
 	}
 
 	@Transactional

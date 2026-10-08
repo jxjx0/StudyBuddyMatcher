@@ -2,6 +2,8 @@ server:
   port: ${CONNECTION_SERVICE_PORT:8084}
 
 spring:
+  config:
+    import: "optional:file:./.env[.properties],optional:file:../.env[.properties],optional:file:./backend/.env[.properties],optional:file:../backend/.env[.properties]"
   application:
     name: connection-service
 
@@ -9,6 +11,11 @@ spring:
 # in Java, so they can be repointed without a rebuild.
 services:
   user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+  contact-service-secret: ${CONTACT_SERVICE_SECRET:}
+
+app:
+  auth:
+    jwt-secret: ${JWT_SECRET:}
 
 management:
   endpoints:

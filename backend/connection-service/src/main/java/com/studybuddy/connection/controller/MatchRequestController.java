@@ -39,6 +39,11 @@ public class MatchRequestController {
 		return matchRequestService.findPendingFor(studentId);
 	}
 
+	@GetMapping("/outgoing-pending")
+	public List<MatchRequest> findOutgoingPending(@RequestParam String studentId) {
+		return matchRequestService.findOutgoingPendingFor(studentId);
+	}
+
 	@PostMapping
 	public ResponseEntity<MatchRequest> send(@RequestParam String senderId,
 											 @RequestParam String recipientId,
