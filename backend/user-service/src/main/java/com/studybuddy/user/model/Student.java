@@ -12,11 +12,6 @@ public class Student extends User {
 	private String programme;
 	private int yearOfStudy;
 	private String contactNumber;
-
-	public Student(String userId, String email, String passwordHash, AccountStatus accountStatus) {
-		super(userId, email, passwordHash, accountStatus);
-	}
-
 	private ArrayList<Course> currentCourses = new ArrayList<>();
 	private ArrayList<Course> coursesForStudying = new ArrayList<>();
 	private MeetingMode meetingMode;
@@ -24,10 +19,10 @@ public class Student extends User {
 	private GroupSizePreference groupSizePreference;
 	private ArrayList<StudyGoal> studyGoals = new ArrayList<>();
 
-	/**
-	 * The UML draws this with no parameters, which cannot do anything. It takes
-	 * the fields a student can edit.
-	 */
+	public Student(String userId, String email, String passwordHash, AccountStatus accountStatus) {
+		super(userId, email, passwordHash, accountStatus);
+	}
+
 	public void updateProfile(String name, String school, String programme,
 							  int yearOfStudy, String contactNumber) {
 		requireText(name, "name", 100);
