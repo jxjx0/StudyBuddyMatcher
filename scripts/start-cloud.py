@@ -37,12 +37,14 @@ def load_environment():
             key, value = line.split("=", 1)
             settings[key.strip()] = value.strip().strip("\"'")
 
-    required = ["SUPABASE_JDBC_URL", "SUPABASE_DB_USER", "SUPABASE_DB_PASSWORD", "JWT_SECRET"]
+    required = ["SUPABASE_JDBC_URL", "SUPABASE_DB_USER", "SUPABASE_DB_PASSWORD", "JWT_SECRET", "CONTACT_SERVICE_SECRET"]
     for key in required:
         if not settings.get(key):
             raise RuntimeError(f"Missing {key} in backend/.env")
     if len(settings["JWT_SECRET"]) < 32:
         raise RuntimeError("JWT_SECRET must contain at least 32 characters.")
+    if len(settings["CONTACT_SERVICE_SECRET"]) < 32:
+        raise RuntimeError("CONTACT_SERVICE_SECRET must contain at least 32 characters.")
 
     database = urllib.parse.urlparse(settings["SUPABASE_JDBC_URL"].removeprefix("jdbc:"))
     if not database.hostname or not database.hostname.endswith((".supabase.co", ".supabase.com")):

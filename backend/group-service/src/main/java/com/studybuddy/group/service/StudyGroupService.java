@@ -20,12 +20,36 @@ public class StudyGroupService {
     public StudyGroupService(StudyGroupRepository groups, GroupJoinRequestRepository requests, StudentClient students, PlatformTransactionManager manager) {
         this.groups=groups; this.requests=requests; this.students=students; transaction=new TransactionTemplate(manager);
     }
+    public GroupOverview overview(String actor) {
+        var people = students.students();
+        requireActive(people.get(actor));
+        var ownRequests = requests.findByStudentId(actor);
+        var savedGroups = groups.findAll();
+        List<GroupView> discover = new ArrayList<>();
+        List<GroupView> mine = new ArrayList<>();
+        Map<String, String> names = new HashMap<>();
+
+        for (var group : savedGroups) {
+            names.put(group.getGroupId(), group.getGroupName());
+            boolean visible = group.isActive() && active(people.get(group.getLeaderId()));
+            boolean member = group.hasMember(actor);
+            if (visible || member) {
+                var details = view(group, actor, people, ownRequests);
+                if (visible) discover.add(details);
+                if (member) mine.add(details);
+            }
+        }
+
+        List<JoinRequestView> history = new ArrayList<>();
+        for (var request : ownRequests) {
+            history.add(requestView(request, names.get(request.getGroupId()), people));
+        }
+        return new GroupOverview(discover, mine, history);
+    }
     public List<GroupView> findAll(String actor, String scope) {
         if (!Set.of("discover","mine").contains(scope)) throw new IllegalArgumentException("Scope must be discover or mine");
-        var people=students.students(); requireActive(people.get(actor));
-        var mine=requests.findByStudentId(actor);
-        return groups.findAll().stream().filter(g -> scope.equals("mine") ? g.hasMember(actor) : g.isActive() && active(people.get(g.getLeaderId())))
-                .map(g -> view(g,actor,people,mine)).toList();
+        var overview = overview(actor);
+        return scope.equals("mine") ? overview.mine() : overview.groups();
     }
     public GroupView findById(String id,String actor) {
         var people=students.students(); requireActive(people.get(actor));
@@ -89,9 +113,7 @@ public class StudyGroupService {
         return requests.findByGroupId(id).stream().map(r->requestView(r,g.getGroupName(),people)).toList();
     }
     public List<JoinRequestView> myRequests(String actor) {
-        var people=students.students(); requireActive(people.get(actor));
-        Map<String,String> names=new HashMap<>(); groups.findAll().forEach(g->names.put(g.getGroupId(),g.getGroupName()));
-        return requests.findByStudentId(actor).stream().map(r->requestView(r,names.get(r.getGroupId()),people)).toList();
+        return overview(actor).requests();
     }
     private JoinRequestView requestView(GroupJoinRequest r,String name,Map<String,StudentDto> people) {
         var student=people.get(r.getStudentId());

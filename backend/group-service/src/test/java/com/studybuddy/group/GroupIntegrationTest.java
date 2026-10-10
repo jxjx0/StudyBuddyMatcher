@@ -128,6 +128,53 @@ class GroupIntegrationTest {
         assertTrue(service.findAll(C,"discover").isEmpty());assertEquals(1,service.findAll(B,"mine").size());
         assertFalse(service.findById(id,B).leaderAvailable());assertThrows(GroupException.class,()->service.requestToJoin(id,C));
     }
+    @Test void overviewMatchesTheExistingTabsAndOnlyLoadsStudentsOnce() {
+        String open = create(3);
+        var accepted = service.requestToJoin(open, B);
+        service.decide(accepted.getGroupJoinRequestId(), A, true);
+        String closed = create(3);
+        service.requestToJoin(closed, B);
+        service.close(closed, A);
+        String unavailable = service.create(input(3), C);
+        service.requestToJoin(unavailable, B);
+        var people = new HashMap<>(students.students());
+        people.remove(C);
+        when(students.students()).thenReturn(people);
+
+        for (String actor : List.of(A, B)) {
+            clearInvocations(students);
+            var overview = service.overview(actor);
+            verify(students, times(1)).students();
+            assertEquals(service.findAll(actor, "discover"), overview.groups());
+            assertEquals(service.findAll(actor, "mine"), overview.mine());
+            assertEquals(service.myRequests(actor), overview.requests());
+        }
+        var ownerOverview = service.overview(A);
+        assertEquals(List.of(open), ownerOverview.groups().stream().map(GroupView::groupId).toList());
+        assertEquals(Set.of(open, closed), new HashSet<>(ownerOverview.mine().stream().map(GroupView::groupId).toList()));
+        assertTrue(ownerOverview.requests().isEmpty());
+        var memberOverview = service.overview(B);
+        assertEquals(List.of(open), memberOverview.mine().stream().map(GroupView::groupId).toList());
+        assertEquals(3, memberOverview.requests().size());
+        for (var request : memberOverview.requests()) {
+            assertEquals(B, request.studentId());
+            if (request.groupId().equals(closed)) assertEquals(GroupJoinRequestStatus.REJECTED, request.status());
+        }
+        assertThrows(GroupException.class, () -> service.overview(C));
+    }
+    @Test void listingGroupsIncludesEveryMemberInTheSameOrderAsIndividualReads() {
+        String first = create(3);
+        var request = service.requestToJoin(first, B);
+        service.decide(request.getGroupJoinRequestId(), A, true);
+        String second = service.create(input(3), C);
+        var listed = groups.findAll();
+        assertEquals(2, listed.size());
+        for (var group : listed) {
+            assertEquals(groups.findById(group.getGroupId()).orElseThrow().getMemberIds(), group.getMemberIds());
+        }
+        assertEquals(List.of(C), groups.findById(second).orElseThrow().getMemberIds());
+        assertEquals(2, groups.findById(first).orElseThrow().getMemberIds().size());
+    }
     @Test void accountAndReferenceValidationPrecedesWrites() {
         when(students.findCourse("IS442")).thenReturn(null);assertThrows(GroupException.class,()->create(2)); assertTrue(groups.findAll().isEmpty());
         when(students.findCourse("IS442")).thenReturn(new CourseDto());String id=create(2);var r=service.requestToJoin(id,B);
@@ -144,6 +191,9 @@ class GroupIntegrationTest {
         assertEquals(401,get("/api/groups",token(null,SECRET,"studybuddy-user-service",3600,"ROLE_STUDENT")).statusCode());
         assertEquals(401,get("/api/groups",token("invalid",SECRET,"studybuddy-user-service",3600,"ROLE_STUDENT")).statusCode());
         assertEquals(403,get("/api/groups",token(A,SECRET,"studybuddy-user-service",3600,"ROLE_ADMIN")).statusCode());
+        assertEquals(401,get("/api/groups/overview",null).statusCode());
+        assertEquals(403,get("/api/groups/overview",token(A,SECRET,"studybuddy-user-service",3600,"ROLE_ADMIN")).statusCode());
+        assertEquals(200,get("/api/groups/overview",token(A,SECRET,"studybuddy-user-service",3600,"ROLE_STUDENT")).statusCode());
     }
     @Test void spoofedLeaderQueryDoesNotGrantOwnershipAndHistoryIsPrivate() throws Exception {
         String id=create(3);service.requestToJoin(id,B);String token=token(C,SECRET,"studybuddy-user-service",3600,"ROLE_STUDENT");

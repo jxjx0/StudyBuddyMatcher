@@ -25,16 +25,16 @@ export function useGroups() {
     loading.value = true;
     error.value = "";
     try {
-      const result = await Promise.all(
-        [
-          "/api/groups",
-          "/api/groups?scope=mine",
-          "/api/groups/join-requests/mine",
-          "/api/courses",
-        ].map((path) => api(path, { signal: controller.signal })),
-      );
+      const options = { signal: controller.signal };
+      const [overview, courseList] = await Promise.all([
+        api("/api/groups/overview", options),
+        api("/api/courses", options),
+      ]);
       if (disposed || current !== version) return false;
-      [groups.value, mine.value, requests.value, courses.value] = result;
+      groups.value = overview.groups;
+      mine.value = overview.mine;
+      requests.value = overview.requests;
+      courses.value = courseList;
       return true;
     } catch (e) {
       if (current === version && !disposed && e.name !== "AbortError")

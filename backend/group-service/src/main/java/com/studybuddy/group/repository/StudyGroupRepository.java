@@ -13,8 +13,19 @@ public class StudyGroupRepository {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     public StudyGroupRepository(JdbcTemplate jdbc, ObjectMapper mapper) { this.jdbc=jdbc; this.mapper=mapper; }
-    @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
-    public List<StudyGroup> findAll() { return jdbc.query("SELECT * FROM study_groups ORDER BY created_at DESC, group_id", this::map); }
+    public List<StudyGroup> findAll() {
+        // Fetch memberships in the same statement, instead of a cloud round trip per group.
+        // One SELECT also keeps the group and its members in the same database snapshot.
+        return jdbc.query("""
+            SELECT g.*, ARRAY(
+                SELECT m.student_id::text FROM study_group_members m
+                WHERE m.group_id = g.group_id
+                ORDER BY m.joined_at, m.student_id
+            ) AS member_ids
+            FROM study_groups g
+            ORDER BY g.created_at DESC, g.group_id
+            """, (rs, row) -> mapGroup(rs, List.of((String[]) rs.getArray("member_ids").getArray())));
+    }
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
     public Optional<StudyGroup> findById(String id) { return find(id, false); }
     public Optional<StudyGroup> lockById(String id) { return find(id, true); }
@@ -25,6 +36,10 @@ public class StudyGroupRepository {
         String id = rs.getString("group_id");
         // Separate statement after taking the group lock: see memberships committed by a previous lock holder.
         List<String> members = jdbc.queryForList("SELECT student_id::text FROM study_group_members WHERE group_id=? ORDER BY joined_at, student_id", String.class, UUID.fromString(id));
+        return mapGroup(rs, members);
+    }
+    private StudyGroup mapGroup(ResultSet rs, List<String> members) throws SQLException {
+        String id = rs.getString("group_id");
         List<StudyGoal> goals = Arrays.stream((String[])rs.getArray("study_goals").getArray()).map(StudyGoal::valueOf).toList();
         return StudyGroup.restore(id, rs.getString("course_code"), rs.getString("leader_id"), rs.getString("group_name"),
                 rs.getString("description"), rs.getInt("max_group_size"), GroupStatus.valueOf(rs.getString("status")),

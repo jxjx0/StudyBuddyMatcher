@@ -17,6 +17,7 @@ public class StudyGroupController {
     public StudyGroupController(StudyGroupService service) { this.service=service; }
     private String actor(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("uid")).toString(); }
     @GetMapping public List<GroupView> all(@AuthenticationPrincipal Jwt jwt,@RequestParam(defaultValue="discover") String scope) { return service.findAll(actor(jwt),scope); }
+    @GetMapping("/overview") public GroupOverview overview(@AuthenticationPrincipal Jwt jwt) { return service.overview(actor(jwt)); }
     @GetMapping("/{id}") public GroupView one(@PathVariable UUID id,@AuthenticationPrincipal Jwt jwt) { return service.findById(id.toString(),actor(jwt)); }
     @PostMapping public ResponseEntity<GroupView> create(@RequestBody @Valid GroupInput input,@AuthenticationPrincipal Jwt jwt) {
         String id=service.create(input,actor(jwt)); return ResponseEntity.status(HttpStatus.CREATED).body(service.findById(id,actor(jwt)));

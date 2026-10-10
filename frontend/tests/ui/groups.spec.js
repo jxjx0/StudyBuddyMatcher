@@ -75,8 +75,15 @@ async function fakeApi(path, options = {}) {
     }
     return structuredClone(group);
   }
-  if (failRefresh && path === "/api/groups")
+  if (failRefresh && path === "/api/groups/overview")
     throw new Error("Network unavailable");
+  if (path === "/api/groups/overview") {
+    return {
+      groups: group.status === "ACTIVE" ? [structuredClone(group)] : [],
+      mine: group.isMember ? [structuredClone(group)] : [],
+      requests: structuredClone(ownRequests),
+    };
+  }
   if (path === "/api/groups")
     return group.status === "ACTIVE" ? [structuredClone(group)] : [];
   if (path === "/api/groups?scope=mine")
@@ -166,6 +173,17 @@ afterEach(() => {
   app?.unmount();
   app = null;
   document.body.innerHTML = "";
+});
+
+test("loading all three tabs shares one group overview request", async () => {
+  await mountPage();
+  await click("My groups");
+  await click("My requests");
+  await click("Browse groups");
+  expect(api.mock.calls.map(([path]) => path)).toEqual([
+    "/api/groups/overview",
+    "/api/courses",
+  ]);
 });
 
 test("Done dismisses details without ending the group", async () => {

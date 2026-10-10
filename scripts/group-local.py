@@ -40,7 +40,7 @@ try:
     jdbc = f"jdbc:postgresql://127.0.0.1:{port}/{db}"
     env = {**os.environ, "SPRING_CONFIG_IMPORT": "", "SUPABASE_JDBC_URL": jdbc,
            "SUPABASE_DB_USER": "studybuddy_local", "SUPABASE_DB_PASSWORD": "", "DEMO_DATA_ENABLED": "false",
-           "JWT_SECRET": secrets.token_urlsafe(48)}
+           "JWT_SECRET": secrets.token_urlsafe(48), "CONTACT_SERVICE_SECRET": secrets.token_urlsafe(48)}
     if args.mode == "test":
         run(pg("psql", "-h", "127.0.0.1", "-p", port, "-U", "studybuddy_local", "-d", db, "-v", "ON_ERROR_STOP=1", "-q", "-c", "CREATE ROLE anon; CREATE ROLE authenticated;"), stdout=subprocess.DEVNULL)
         run(pg("psql", "-h", "127.0.0.1", "-p", port, "-U", "studybuddy_local", "-d", db, "-v", "ON_ERROR_STOP=1", "-q", "-f", ROOT/"backend/group-service/src/main/resources/schema.sql"), stdout=subprocess.DEVNULL)
