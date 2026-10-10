@@ -193,7 +193,9 @@ test("loading all three tabs shares one group overview request", async () => {
 
 function pauseOverview() {
   let finish;
-  pendingOverview = new Promise((resolve) => { finish = resolve; });
+  pendingOverview = new Promise((resolve) => {
+    finish = resolve;
+  });
   return finish;
 }
 
@@ -205,7 +207,9 @@ test("returning shows saved groups before the refresh finishes, then replaces th
   await router.push("/groups");
   await settle();
   expect(button("View Java study circle")).toBeDefined();
-  expect(document.querySelector(".refresh").textContent).toContain("Refreshing…");
+  expect(document.querySelector(".refresh").textContent).toContain(
+    "Refreshing…",
+  );
   expect(document.body.textContent).not.toContain("Loading groups…");
   expect(button("Create group").disabled).toBe(false);
   finish();
@@ -323,7 +327,9 @@ test("the safe confirmation action and Escape both keep the group active", async
   await openGroup();
   await click("End group…");
   expect(topDialog().textContent).toContain("will close permanently");
-  expect(topDialog().textContent).toContain("Pending requests will be rejected");
+  expect(topDialog().textContent).toContain(
+    "Pending requests will be rejected",
+  );
   await click("Keep group active", topDialog());
   await click("End group…");
   topDialog().dispatchEvent(new Event("cancel", { cancelable: true }));
@@ -681,7 +687,9 @@ test("group filters work together and keep either-mode, flexible groups visible"
   await setFilter("Study goal", "CONCEPT_REVIEW");
 
   group.meetingMode = "ONLINE";
-  group.availability = [{ day: "MONDAY", startTime: "18:00", endTime: "19:00" }];
+  group.availability = [
+    { day: "MONDAY", startTime: "18:00", endTime: "19:00" },
+  ];
   await click("Refresh");
   expect(document.querySelector(".group-cards")).toBeNull();
   await setFilter("Meeting mode", "ONLINE");
@@ -690,7 +698,9 @@ test("group filters work together and keep either-mode, flexible groups visible"
   expect(button("View Java study circle")).toBeDefined();
 
   await click("Reset filters");
-  for (const input of document.querySelectorAll(".filter-surface select, .filter-surface input")) {
+  for (const input of document.querySelectorAll(
+    ".filter-surface select, .filter-surface input",
+  )) {
     expect(input.value).toBe("");
   }
   expect(button("View Java study circle")).toBeDefined();

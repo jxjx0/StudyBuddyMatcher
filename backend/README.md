@@ -81,3 +81,27 @@ The shared cloud database stores accounts in `user_accounts`, profiles in `stude
 Contact information is returned to a student only through an active study buddy connection. The connection-service checks the caller's JWT and connection membership before using the internal contact endpoint in user-service. Configure `CONTACT_SERVICE_SECRET` as described above; do not expose it to the frontend.
 
 The group schema is applied explicitly. For an already configured cloud database, leave automatic schema initialization and demo seeding disabled. The separate `scripts/group-local.py` runner creates its own disposable database for tests and local demos; it does not populate or update cloud Supabase.
+
+## Study Groups formatting and checks
+
+Formatting is limited to the Study Groups files listed in `group-service/pom.xml` and `frontend/package.json`. Shared student/course models and teammates' pages are outside that list. The frontend configuration is passed explicitly so editors do not apply it across the whole project.
+
+From the repository root, check or apply Java formatting:
+
+```sh
+cd backend
+./mvnw -pl group-service spotless:check
+./mvnw -pl group-service spotless:apply
+```
+
+On Windows, use `mvnw.cmd` instead of `./mvnw`. For frontend formatting, run these in `frontend`:
+
+```sh
+npm ci
+npm run format:groups:check
+npm run format:groups:write
+```
+
+The `write`/`apply` commands format the selected files. The `check` commands report differences without editing them. Run `npm test` and `npm run build` in `frontend` to check the frontend. Run `python3 scripts/group-local.py test` from the repository root with PostgreSQL 17 installed to run backend tests against a disposable local database.
+
+[Study Groups checks](../.github/workflows/study-groups.yml) runs on relevant pull requests and pushes to `main`, and can also be started manually in GitHub Actions. It checks the scoped formatting, runs all existing backend and frontend tests, and builds the frontend. The backend job creates its own PostgreSQL database, initializes the group schema, and fails if any group test suite is missing or skipped. No cloud database or repository secrets are needed. Formatter versions are pinned for consistent results.

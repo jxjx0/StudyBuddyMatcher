@@ -94,7 +94,10 @@ function matchesGroupFilters(group) {
     return false;
   }
 
-  if (maximumGroupSize.value && group.maxGroupSize > Number(maximumGroupSize.value)) {
+  if (
+    maximumGroupSize.value &&
+    group.maxGroupSize > Number(maximumGroupSize.value)
+  ) {
     return false;
   }
   return true;
@@ -161,7 +164,9 @@ async function saveGroup(draft) {
 }
 async function handleGroupAction({ path, message, method, endGroup }) {
   notice.value = "";
-  const saved = await mutate(path, method, undefined, { dismissDetail: endGroup });
+  const saved = await mutate(path, method, undefined, {
+    dismissDetail: endGroup,
+  });
   if (!saved) return;
   notice.value = message;
   if (endGroup) {

@@ -35,11 +35,9 @@ watch(
 const joiningMessage = computed(() => {
   const group = props.group;
   if (!group) return "";
-  if (group.myRequestStatus === "PENDING")
-    return "Request pending.";
+  if (group.myRequestStatus === "PENDING") return "Request pending.";
   if (group.status === "CLOSED") return "This group is closed.";
-  if (!group.leaderAvailable)
-    return "Requests paused: leader unavailable.";
+  if (!group.leaderAvailable) return "Requests paused: leader unavailable.";
   if (group.memberCount >= group.maxGroupSize) return "This group is full.";
   return "Joining is unavailable.";
 });
@@ -117,9 +115,7 @@ function confirm() {
       <dl class="detail-grid">
         <div>
           <dt>Members</dt>
-          <dd>
-            {{ group.memberCount }} / {{ group.maxGroupSize }}
-          </dd>
+          <dd> {{ group.memberCount }} / {{ group.maxGroupSize }} </dd>
         </div>
         <div>
           <dt>Study goals</dt>

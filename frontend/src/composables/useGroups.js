@@ -51,7 +51,9 @@ export function useGroups() {
   }
 
   function isCurrentDetail(overviewAtStart, requestVersion) {
-    return isCurrentOverview(overviewAtStart) && requestVersion === detailsVersion;
+    return (
+      isCurrentOverview(overviewAtStart) && requestVersion === detailsVersion
+    );
   }
 
   function isCurrentSession(sessionToken) {
@@ -75,7 +77,10 @@ export function useGroups() {
       cachedOverview = { sessionToken: token.value, overview, courseList };
       return true;
     } catch (problem) {
-      if (isCurrentOverview(startingOverviewVersion) && problem.name !== "AbortError") {
+      if (
+        isCurrentOverview(startingOverviewVersion) &&
+        problem.name !== "AbortError"
+      ) {
         cachedOverview = null;
         clearOverview();
         error.value = problem.message;
