@@ -19,6 +19,7 @@ const {
   selected,
   leaderRequests,
   loading,
+  loaded,
   detailLoading,
   busy,
   error,
@@ -206,9 +207,11 @@ function viewGroup(id) {
     >
       {{ notice }}
     </p>
-    <p v-if="loading" role="status">Loading groups…</p>
+    <p v-if="loading" role="status">
+      {{ loaded ? "Refreshing groups…" : "Loading groups…" }}
+    </p>
     <p v-if="detailLoading" role="status">Opening group…</p>
-    <template v-if="!loading && tab !== 'requests'">
+    <template v-if="loaded && tab !== 'requests'">
       <div
         v-if="tab === 'mine'"
         class="group-status-controls"
@@ -363,7 +366,7 @@ function viewGroup(id) {
         </div>
       </div>
     </template>
-    <template v-else-if="!loading && tab === 'requests'">
+    <template v-else-if="loaded && tab === 'requests'">
       <div
         v-if="requests.length"
         class="group-status-controls"

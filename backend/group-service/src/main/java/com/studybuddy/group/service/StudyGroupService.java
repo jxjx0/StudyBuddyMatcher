@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 @Service
@@ -21,10 +23,25 @@ public class StudyGroupService {
         this.groups=groups; this.requests=requests; this.students=students; transaction=new TransactionTemplate(manager);
     }
     public GroupOverview overview(String actor) {
-        var people = students.students();
-        requireActive(people.get(actor));
-        var ownRequests = requests.findByStudentId(actor);
-        var savedGroups = groups.findAll();
+        // These reads are independent. Start the database reads while user-service loads students.
+        // The executor waits for its tasks on close; no background work outlives this request.
+        try (var reads = Executors.newVirtualThreadPerTaskExecutor()) {
+            var groupRead = reads.submit(groups::findAll);
+            var requestRead = reads.submit(() -> requests.findByStudentId(actor));
+            var people = students.students();
+            requireActive(people.get(actor));
+            return buildOverview(actor, people, requestRead.get(), groupRead.get());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new GroupException(HttpStatus.SERVICE_UNAVAILABLE, "Group loading was interrupted. Please try again.");
+        } catch (ExecutionException e) {
+            // Preserve the existing HTTP handling for database failures.
+            if (e.getCause() instanceof RuntimeException cause) throw cause;
+            throw new GroupException(HttpStatus.SERVICE_UNAVAILABLE, "Groups are unavailable. Please try again shortly.");
+        }
+    }
+    private GroupOverview buildOverview(String actor, Map<String, StudentDto> people,
+                                        List<GroupJoinRequest> ownRequests, List<StudyGroup> savedGroups) {
         List<GroupView> discover = new ArrayList<>();
         List<GroupView> mine = new ArrayList<>();
         Map<String, String> names = new HashMap<>();

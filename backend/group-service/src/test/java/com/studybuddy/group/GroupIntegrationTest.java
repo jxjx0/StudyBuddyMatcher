@@ -175,6 +175,43 @@ class GroupIntegrationTest {
         assertEquals(List.of(C), groups.findById(second).orElseThrow().getMemberIds());
         assertEquals(2, groups.findById(first).orElseThrow().getMemberIds().size());
     }
+    @Test void overviewStartsIndependentReadsWithoutWaitingForAnotherReadToFinish() {
+        var groupStore = mock(StudyGroupRepository.class);
+        var requestStore = mock(GroupJoinRequestRepository.class);
+        var studentClient = mock(StudentClient.class);
+        var people = students.students();
+        var started = new CountDownLatch(3);
+        when(groupStore.findAll()).thenAnswer(call -> {
+            started.countDown();
+            assertTrue(started.await(3, TimeUnit.SECONDS), "All reads should start together");
+            return List.of();
+        });
+        when(requestStore.findByStudentId(A)).thenAnswer(call -> {
+            started.countDown();
+            assertTrue(started.await(3, TimeUnit.SECONDS), "All reads should start together");
+            return List.of();
+        });
+        when(studentClient.students()).thenAnswer(call -> {
+            started.countDown();
+            assertTrue(started.await(3, TimeUnit.SECONDS), "All reads should start together");
+            return people;
+        });
+        var parallelService = new StudyGroupService(groupStore, requestStore, studentClient, manager);
+        assertEquals(new GroupOverview(List.of(), List.of(), List.of()), parallelService.overview(A));
+    }
+    @Test void overviewPreservesDatabaseFailuresFromEitherParallelRead() {
+        var groupStore = mock(StudyGroupRepository.class);
+        var requestStore = mock(GroupJoinRequestRepository.class);
+        var parallelService = new StudyGroupService(groupStore, requestStore, students, manager);
+        var failure = new org.springframework.dao.DataAccessResourceFailureException("Database offline");
+        when(groupStore.findAll()).thenThrow(failure);
+        when(requestStore.findByStudentId(A)).thenReturn(List.of());
+        assertSame(failure, assertThrows(org.springframework.dao.DataAccessException.class, () -> parallelService.overview(A)));
+        reset(groupStore, requestStore);
+        when(groupStore.findAll()).thenReturn(List.of());
+        when(requestStore.findByStudentId(A)).thenThrow(failure);
+        assertSame(failure, assertThrows(org.springframework.dao.DataAccessException.class, () -> parallelService.overview(A)));
+    }
     @Test void accountAndReferenceValidationPrecedesWrites() {
         when(students.findCourse("IS442")).thenReturn(null);assertThrows(GroupException.class,()->create(2)); assertTrue(groups.findAll().isEmpty());
         when(students.findCourse("IS442")).thenReturn(new CourseDto());String id=create(2);var r=service.requestToJoin(id,B);

@@ -2,6 +2,12 @@ import { ref, watch, onScopeDispose } from "vue";
 import { token } from "./useAuth";
 import { api } from "../services/api";
 
+// Keep the last successful list only for this login session, even when the page unmounts.
+let cachedOverview = null;
+watch(token, () => {
+  cachedOverview = null;
+}, { flush: "sync" });
+
 export function useGroups() {
   const groups = ref([]);
   const mine = ref([]);
@@ -11,6 +17,7 @@ export function useGroups() {
   const leaderRequests = ref([]);
   const detailLoading = ref(false);
   const loading = ref(false);
+  const loaded = ref(false);
   const busy = ref(false);
   const error = ref("");
   // Ignore responses from an older refresh, closed detail, or unmounted page.
@@ -18,6 +25,20 @@ export function useGroups() {
   let detailVersion = 0;
   let disposed = false;
   let controller = null;
+  function showOverview(overview, courseList) {
+    groups.value = overview.groups;
+    mine.value = overview.mine;
+    requests.value = overview.requests;
+    courses.value = courseList;
+    loaded.value = true;
+  }
+  function clearOverview() {
+    groups.value = [];
+    mine.value = [];
+    requests.value = [];
+    courses.value = [];
+    loaded.value = false;
+  }
   async function load() {
     const current = ++version;
     controller?.abort();
@@ -31,14 +52,15 @@ export function useGroups() {
         api("/api/courses", options),
       ]);
       if (disposed || current !== version) return false;
-      groups.value = overview.groups;
-      mine.value = overview.mine;
-      requests.value = overview.requests;
-      courses.value = courseList;
+      showOverview(overview, courseList);
+      cachedOverview = { session: token.value, overview, courseList };
       return true;
     } catch (e) {
-      if (current === version && !disposed && e.name !== "AbortError")
+      if (current === version && !disposed && e.name !== "AbortError") {
+        cachedOverview = null;
+        clearOverview();
         error.value = e.message;
+      }
       return false;
     } finally {
       if (current === version && !disposed) loading.value = false;
@@ -82,6 +104,7 @@ export function useGroups() {
     if (busy.value) return false;
     busy.value = true;
     error.value = "";
+    cachedOverview = null;
     const session = token.value;
     const id = selected.value?.groupId;
     const detail = detailVersion;
@@ -90,6 +113,7 @@ export function useGroups() {
         method,
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
+      if (token.value === session) cachedOverview = null;
       if (disposed || token.value !== session) return false;
       if (dismissDetail) closeDetail();
       let refreshed = await load();
@@ -101,9 +125,8 @@ export function useGroups() {
       if (!refreshed) {
         // The write succeeded. Do not leave stale actions available or invite a second save.
         closeDetail();
-        groups.value = [];
-        mine.value = [];
-        requests.value = [];
+        cachedOverview = null;
+        clearOverview();
         error.value =
           "Your change was saved, but the latest groups could not be loaded. Refresh to see the current state.";
       }
@@ -121,15 +144,19 @@ export function useGroups() {
       ++version;
       ++detailVersion;
       controller?.abort();
-      groups.value = [];
-      mine.value = [];
-      requests.value = [];
-      courses.value = [];
+      clearOverview();
       closeDetail();
       busy.value = false;
-      if (token.value) load();
+      loading.value = false;
+      error.value = "";
+      if (token.value) {
+        if (cachedOverview?.session === token.value) {
+          showOverview(cachedOverview.overview, cachedOverview.courseList);
+        }
+        load();
+      }
     },
-    { immediate: true },
+    { immediate: true, flush: "sync" },
   );
   onScopeDispose(() => {
     disposed = true;
@@ -145,6 +172,7 @@ export function useGroups() {
     selected,
     leaderRequests,
     loading,
+    loaded,
     detailLoading,
     busy,
     error,

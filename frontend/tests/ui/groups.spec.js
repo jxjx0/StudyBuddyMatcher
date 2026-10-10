@@ -20,6 +20,7 @@ let failRefresh;
 let failWrite;
 let failDetail;
 let pendingWrite;
+let pendingOverview;
 
 // jsdom has no native modal lifecycle. Real focus, Escape and layout are tested in the browser.
 HTMLDialogElement.prototype.showModal = function () {
@@ -78,11 +79,13 @@ async function fakeApi(path, options = {}) {
   if (failRefresh && path === "/api/groups/overview")
     throw new Error("Network unavailable");
   if (path === "/api/groups/overview") {
-    return {
+    const result = {
       groups: group.status === "ACTIVE" ? [structuredClone(group)] : [],
       mine: group.isMember ? [structuredClone(group)] : [],
       requests: structuredClone(ownRequests),
     };
+    if (pendingOverview) await pendingOverview;
+    return result;
   }
   if (path === "/api/groups")
     return group.status === "ACTIVE" ? [structuredClone(group)] : [];
@@ -165,6 +168,8 @@ beforeEach(() => {
   failWrite = false;
   failDetail = false;
   pendingWrite = null;
+  pendingOverview = null;
+  token.value = "";
   token.value = "test-session";
   api.mockReset().mockImplementation(fakeApi);
   document.body.innerHTML = '<main id="main-content" tabindex="-1"></main>';
@@ -184,6 +189,109 @@ test("loading all three tabs shares one group overview request", async () => {
     "/api/groups/overview",
     "/api/courses",
   ]);
+});
+
+function pauseOverview() {
+  let finish;
+  pendingOverview = new Promise((resolve) => { finish = resolve; });
+  return finish;
+}
+
+test("returning shows saved groups before the refresh finishes, then replaces them", async () => {
+  await mountPage();
+  await router.push("/away");
+  const finish = pauseOverview();
+  group.groupName = "Updated on the server";
+  await router.push("/groups");
+  await settle();
+  expect(button("View Java study circle")).toBeDefined();
+  expect(document.body.textContent).toContain("Refreshing groups…");
+  finish();
+  await settle();
+  expect(button("View Updated on the server")).toBeDefined();
+  expect(document.body.textContent).not.toContain("Refreshing groups…");
+});
+
+test("logout while away clears saved groups even when the same account logs in again", async () => {
+  await mountPage();
+  await router.push("/away");
+  token.value = "";
+  token.value = "test-session";
+  const finish = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  expect(document.querySelectorAll(".large-group-card")).toHaveLength(0);
+  expect(document.body.textContent).toContain("Loading groups…");
+  finish();
+  await settle();
+});
+
+test("switching accounts clears groups immediately while the new account loads", async () => {
+  await mountPage();
+  const finish = pauseOverview();
+  group.groupName = "Other account's group";
+  token.value = "other-session";
+  await nextTick();
+  expect(document.body.textContent).not.toContain("Java study circle");
+  finish();
+  await settle();
+  expect(button("View Other account's group")).toBeDefined();
+});
+
+test("a failed background refresh clears saved groups and offers retry", async () => {
+  await mountPage();
+  await router.push("/away");
+  failRefresh = true;
+  await router.push("/groups");
+  await settle();
+  expect(document.body.textContent).toContain("Network unavailable");
+  expect(document.querySelectorAll(".large-group-card")).toHaveLength(0);
+  await router.push("/away");
+  failRefresh = false;
+  const finish = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  expect(document.querySelectorAll(".large-group-card")).toHaveLength(0);
+  finish();
+  await settle();
+  expect(button("View Java study circle")).toBeDefined();
+});
+
+test("a late response from an unmounted page cannot replace the newer saved list", async () => {
+  await mountPage();
+  await router.push("/away");
+  const finishOld = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  await router.push("/away");
+  pendingOverview = null;
+  group.groupName = "Newest group";
+  await router.push("/groups");
+  await settle();
+  finishOld();
+  await settle();
+  await router.push("/away");
+  const finishNew = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  expect(button("View Newest group")).toBeDefined();
+  finishNew();
+  await settle();
+});
+
+test("saved edits are used when returning before another refresh completes", async () => {
+  await mountPage();
+  await openGroup();
+  await click("Edit group");
+  await fill('input[maxlength="100"]', "Saved group name");
+  await click("Save group", topDialog());
+  await router.push("/away");
+  const finish = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  expect(button("View Saved group name")).toBeDefined();
+  finish();
+  await settle();
 });
 
 test("Done dismisses details without ending the group", async () => {
