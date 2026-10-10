@@ -48,12 +48,12 @@ const requestEmptyTitle = computed(() => {
   return "No past decisions yet";
 });
 const tab = ref("browse");
-const query = ref("");
-const course = ref("");
-const goal = ref("");
-const mode = ref("");
-const day = ref("");
-const size = ref("");
+const searchQuery = ref("");
+const selectedCourse = ref("");
+const selectedGoal = ref("");
+const selectedMeetingMode = ref("");
+const selectedDay = ref("");
+const maximumGroupSize = ref("");
 const showFilters = ref(false);
 const editorOpen = ref(false);
 const editingGroup = ref(null);
@@ -62,41 +62,51 @@ const views = [
   { key: "mine", label: "My groups" },
   { key: "requests", label: "My requests" },
 ];
-const visible = computed(() => {
+const visibleGroups = computed(() => {
   const source = tab.value === "mine" ? mine.value : groups.value;
-  return source.filter((group) => {
-    if (tab.value === "mine" && group.status !== groupStatus.value)
-      return false;
-    if (
-      !group.groupName.toLowerCase().includes(query.value.trim().toLowerCase())
-    )
-      return false;
-    if (course.value && group.courseCode !== course.value) return false;
-    if (goal.value && !group.studyGoals.includes(goal.value)) return false;
-    if (
-      mode.value &&
-      group.meetingMode !== mode.value &&
-      group.meetingMode !== "EITHER"
-    )
-      return false;
-    if (
-      day.value &&
-      group.availability.length &&
-      !group.availability.some((slot) => slot.day === day.value)
-    )
-      return false;
-    if (size.value && group.maxGroupSize > Number(size.value)) return false;
-    return true;
-  });
+  return source.filter(matchesGroupFilters);
 });
+function matchesGroupFilters(group) {
+  if (tab.value === "mine" && group.status !== groupStatus.value) return false;
+
+  const searchText = searchQuery.value.trim().toLowerCase();
+  if (!group.groupName.toLowerCase().includes(searchText)) return false;
+  if (selectedCourse.value && group.courseCode !== selectedCourse.value) {
+    return false;
+  }
+  if (selectedGoal.value && !group.studyGoals.includes(selectedGoal.value)) {
+    return false;
+  }
+
+  if (
+    selectedMeetingMode.value &&
+    group.meetingMode !== selectedMeetingMode.value &&
+    group.meetingMode !== "EITHER"
+  ) {
+    return false;
+  }
+
+  if (
+    selectedDay.value &&
+    group.availability.length &&
+    !group.availability.some((slot) => slot.day === selectedDay.value)
+  ) {
+    return false;
+  }
+
+  if (maximumGroupSize.value && group.maxGroupSize > Number(maximumGroupSize.value)) {
+    return false;
+  }
+  return true;
+}
 const hasFilters = computed(() =>
   Boolean(
-    query.value.trim() ||
-    course.value ||
-    goal.value ||
-    mode.value ||
-    day.value ||
-    size.value,
+    searchQuery.value.trim() ||
+    selectedCourse.value ||
+    selectedGoal.value ||
+    selectedMeetingMode.value ||
+    selectedDay.value ||
+    maximumGroupSize.value,
   ),
 );
 const emptyTitle = computed(() => {
@@ -111,12 +121,12 @@ function browseGroups() {
   resetFilters();
 }
 function resetFilters() {
-  query.value = "";
-  course.value = "";
-  goal.value = "";
-  mode.value = "";
-  day.value = "";
-  size.value = "";
+  searchQuery.value = "";
+  selectedCourse.value = "";
+  selectedGoal.value = "";
+  selectedMeetingMode.value = "";
+  selectedDay.value = "";
+  maximumGroupSize.value = "";
 }
 function statusLabel(group) {
   if (group.status === "CLOSED") return "Closed";
@@ -130,27 +140,29 @@ function membershipLabel(group) {
   if (group.myRequestStatus === "PENDING") return "Request pending";
   return "";
 }
-function edit(group = null) {
+function openEditor(group = null) {
   error.value = "";
   notice.value = "";
   editingGroup.value = group;
   editorOpen.value = true;
 }
-async function save(draft) {
-  const id = editingGroup.value?.groupId;
-  const path = id ? `/api/groups/${id}` : "/api/groups";
-  if (await mutate(path, id ? "PUT" : "POST", draft, { dismissDetail: true })) {
+async function saveGroup(draft) {
+  const groupId = editingGroup.value?.groupId;
+  const path = groupId ? `/api/groups/${groupId}` : "/api/groups";
+  const method = groupId ? "PUT" : "POST";
+  const saved = await mutate(path, method, draft, { dismissDetail: true });
+  if (saved) {
     editorOpen.value = false;
     tab.value = "mine";
     groupStatus.value = "ACTIVE";
     resetFilters();
-    notice.value = id ? "Group updated." : "Group created.";
+    notice.value = groupId ? "Group updated." : "Group created.";
   }
 }
-async function action({ path, message, method, endGroup }) {
+async function handleGroupAction({ path, message, method, endGroup }) {
   notice.value = "";
-  if (!(await mutate(path, method, undefined, { dismissDetail: endGroup })))
-    return;
+  const saved = await mutate(path, method, undefined, { dismissDetail: endGroup });
+  if (!saved) return;
   notice.value = message;
   if (endGroup) {
     tab.value = "mine";
@@ -158,9 +170,9 @@ async function action({ path, message, method, endGroup }) {
     resetFilters();
   }
 }
-function viewGroup(id) {
+function viewGroup(groupId) {
   notice.value = "";
-  open(id);
+  open(groupId);
 }
 </script>
 <template>
@@ -172,7 +184,7 @@ function viewGroup(id) {
       <button
         class="primary-button"
         :disabled="busy || !courses.length"
-        @click="edit()"
+        @click="openEditor()"
       >
         <Plus :size="18" />Create group
       </button>
@@ -232,13 +244,13 @@ function viewGroup(id) {
         <div class="group-search">
           <label class="search-box"
             ><Search :size="20" /><input
-              v-model="query"
+              v-model="searchQuery"
               type="search"
               aria-label="Search group name"
               placeholder="Search groups by name" /></label
           ><label class="field"
             ><span>Course</span
-            ><select v-model="course">
+            ><select v-model="selectedCourse">
               <option value="">Any course</option>
               <option
                 v-for="item in courses"
@@ -261,7 +273,7 @@ function viewGroup(id) {
         <div v-if="showFilters" id="group-filters" class="filter-grid">
           <label class="field"
             ><span>Study goal</span
-            ><select v-model="goal">
+            ><select v-model="selectedGoal">
               <option value="">Any goal</option>
               <option v-for="item in studyGoals" :key="item" :value="item">
                 {{ labelOf(item) }}
@@ -269,7 +281,7 @@ function viewGroup(id) {
             </select></label
           ><label class="field"
             ><span>Meeting mode</span
-            ><select v-model="mode">
+            ><select v-model="selectedMeetingMode">
               <option value="">Any mode</option>
               <option v-for="item in meetingModes" :key="item" :value="item">
                 {{ labelOf(item) }}
@@ -277,7 +289,7 @@ function viewGroup(id) {
             </select></label
           ><label class="field"
             ><span>Day</span
-            ><select v-model="day">
+            ><select v-model="selectedDay">
               <option value="">Any day</option>
               <option v-for="item in weekDays" :key="item" :value="item">
                 {{ labelOf(item) }}
@@ -285,22 +297,26 @@ function viewGroup(id) {
             </select></label
           ><label class="field"
             ><span>Maximum group size</span
-            ><input v-model="size" type="number" min="2" placeholder="Any size"
+            ><input
+              v-model="maximumGroupSize"
+              type="number"
+              min="2"
+              placeholder="Any size"
           /></label>
         </div>
       </div>
       <div class="results-heading">
         <p role="status">
-          {{ visible.length }}
-          {{ visible.length === 1 ? "group" : "groups" }} found
+          {{ visibleGroups.length }}
+          {{ visibleGroups.length === 1 ? "group" : "groups" }} found
         </p>
         <button v-if="hasFilters" class="text-button" @click="resetFilters">
           Reset filters
         </button>
       </div>
-      <div v-if="visible.length" class="group-cards">
+      <div v-if="visibleGroups.length" class="group-cards">
         <article
-          v-for="group in visible"
+          v-for="group in visibleGroups"
           :key="group.groupId"
           class="large-group-card"
         >
@@ -345,7 +361,7 @@ function viewGroup(id) {
           <button
             class="primary-button"
             :disabled="busy || !courses.length"
-            @click="edit()"
+            @click="openEditor()"
           >
             Create group
           </button>
@@ -424,8 +440,8 @@ function viewGroup(id) {
       :busy="busy"
       :error="error"
       @close="closeDetail"
-      @edit="edit"
-      @action="action"
+      @edit="openEditor"
+      @action="handleGroupAction"
     />
     <GroupEditor
       :open="editorOpen"
@@ -434,7 +450,7 @@ function viewGroup(id) {
       :busy="busy"
       :error="error"
       @close="editorOpen = false"
-      @save="save"
+      @save="saveGroup"
     />
   </section>
 </template>

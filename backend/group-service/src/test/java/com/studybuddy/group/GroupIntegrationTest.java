@@ -219,6 +219,37 @@ class GroupIntegrationTest {
         assertThrows(GroupException.class,()->service.decide(r.getGroupJoinRequestId(),A,true));assertTrue(requests.findById(r.getGroupJoinRequestId()).orElseThrow().isPending());
         when(students.findStudent(A)).thenReturn(null);assertThrows(GroupException.class,()->service.close(id,A));
     }
+    @Test void groupViewsUseTheLatestRequestAndKeepUnavailableMembersVisible() {
+        String groupId = create(3);
+        var rejectedRequest = service.requestToJoin(groupId, B);
+        service.decide(rejectedRequest.getGroupJoinRequestId(), A, false);
+        assertTrue(service.findById(groupId, B).canRequest());
+        var pendingRequest = service.requestToJoin(groupId, B);
+        // Make the history order explicit, independent of database clock precision.
+        jdbc.update("UPDATE group_join_requests SET created_at=created_at - interval '1 hour' WHERE group_join_request_id=?",
+                UUID.fromString(rejectedRequest.getGroupJoinRequestId()));
+        var pendingView = service.findById(groupId, B);
+        assertEquals(GroupJoinRequestStatus.PENDING, pendingView.myRequestStatus());
+        assertFalse(pendingView.canRequest());
+        service.decide(pendingRequest.getGroupJoinRequestId(), A, true);
+        var people = new HashMap<>(students.students());
+        people.remove(B);
+        when(students.students()).thenReturn(people);
+        var leaderView = service.findById(groupId, A);
+        assertEquals(new GroupView.Member(B, "Unavailable student", false), leaderView.members().get(1));
+        assertEquals("Unavailable student", service.findJoinRequests(groupId, A).getFirst().studentName());
+    }
+
+    @Test void aClosedGroupIsVisibleToPastApplicantsButNotUnrelatedStudents() {
+        String groupId = create(3);
+        service.requestToJoin(groupId, B);
+        service.close(groupId, A);
+        var applicantView = service.findById(groupId, B);
+        assertEquals(GroupStatus.CLOSED, applicantView.status());
+        assertEquals(GroupJoinRequestStatus.REJECTED, applicantView.myRequestStatus());
+        assertFalse(applicantView.canRequest());
+        assertThrows(GroupException.class, () -> service.findById(groupId, C));
+    }
     @Test void actualBearerTokensEnforceSignatureExpiryIssuerUidAndRole() throws Exception {
         assertEquals(401,get("/api/groups",null).statusCode());
         assertEquals(200,get("/api/groups",token(A,SECRET,"studybuddy-user-service",3600,"ROLE_STUDENT")).statusCode());

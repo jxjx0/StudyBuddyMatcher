@@ -7,6 +7,24 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GroupDomainTest {
+    @Test void goalsKeepTheirOrderAndAvailabilityCopiesCannotChangeSavedState() {
+        var studyGroup = group();
+        studyGroup.updateDetails("Revision", "", 3, null,
+                List.of(StudyGoal.CONCEPT_REVIEW, StudyGoal.EXAM_PREPARATION, StudyGoal.CONCEPT_REVIEW), List.of());
+        assertEquals(List.of(StudyGoal.CONCEPT_REVIEW, StudyGoal.EXAM_PREPARATION), studyGroup.getStudyGoals());
+        assertEquals(MeetingMode.EITHER, studyGroup.getMeetingMode());
+
+        var monday = new TimeSlot("MONDAY", LocalTime.of(18, 0), LocalTime.of(19, 0));
+        var tuesday = new TimeSlot("TUESDAY", LocalTime.of(18, 0), LocalTime.of(19, 0));
+        studyGroup.addAvailability(monday);
+        studyGroup.addAvailability(tuesday);
+        studyGroup.addAvailability(monday);
+        studyGroup.removeAvailability(monday);
+        assertEquals(1, studyGroup.getAvailability().size());
+        assertEquals("TUESDAY", studyGroup.getAvailability().getFirst().getDay());
+        assertThrows(UnsupportedOperationException.class, () -> studyGroup.getAvailability().clear());
+        assertThrows(UnsupportedOperationException.class, () -> studyGroup.getStudyGoals().clear());
+    }
     private final String leader=UUID.randomUUID().toString(), applicant=UUID.randomUUID().toString();
     private StudyGroup group() { return StudyGroup.create(" Revision ",null,"IS442",leader,2,MeetingMode.ONLINE,List.of(),List.of()); }
     @Test void leaderCountsAndCapacityCannotBeExceeded() {

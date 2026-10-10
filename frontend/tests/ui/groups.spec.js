@@ -650,6 +650,52 @@ test("filtered empty results offer a reset that restores the visible group", asy
   expect(button("View Java study circle")).toBeDefined();
 });
 
+test("group filters work together and keep either-mode, flexible groups visible", async () => {
+  group.meetingMode = "EITHER";
+  await mountPage();
+  await click("More filters");
+
+  async function setFilter(label, value) {
+    const field = [...document.querySelectorAll("label.field")].find(
+      (element) => element.querySelector("span")?.textContent === label,
+    );
+    const input = field.querySelector("select, input");
+    input.value = value;
+    const eventType = input.tagName === "SELECT" ? "change" : "input";
+    input.dispatchEvent(new Event(eventType, { bubbles: true }));
+    await settle();
+  }
+
+  await setFilter("Course", "IS442");
+  await setFilter("Study goal", "CONCEPT_REVIEW");
+  await setFilter("Meeting mode", "IN_PERSON");
+  await setFilter("Day", "TUESDAY");
+  await setFilter("Maximum group size", "3");
+  expect(button("View Java study circle")).toBeDefined();
+
+  await setFilter("Maximum group size", "2");
+  expect(document.querySelector(".group-cards")).toBeNull();
+  await setFilter("Maximum group size", "3");
+  await setFilter("Study goal", "EXAM_PREPARATION");
+  expect(document.querySelector(".group-cards")).toBeNull();
+  await setFilter("Study goal", "CONCEPT_REVIEW");
+
+  group.meetingMode = "ONLINE";
+  group.availability = [{ day: "MONDAY", startTime: "18:00", endTime: "19:00" }];
+  await click("Refresh");
+  expect(document.querySelector(".group-cards")).toBeNull();
+  await setFilter("Meeting mode", "ONLINE");
+  expect(document.querySelector(".group-cards")).toBeNull();
+  await setFilter("Day", "MONDAY");
+  expect(button("View Java study circle")).toBeDefined();
+
+  await click("Reset filters");
+  for (const input of document.querySelectorAll(".filter-surface select, .filter-surface input")) {
+    expect(input.value).toBe("");
+  }
+  expect(button("View Java study circle")).toBeDefined();
+});
+
 test("Browse from empty My requests clears the previous group filters", async () => {
   await mountPage();
   const search = document.querySelector('input[type="search"]');
