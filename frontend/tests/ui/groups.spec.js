@@ -205,11 +205,26 @@ test("returning shows saved groups before the refresh finishes, then replaces th
   await router.push("/groups");
   await settle();
   expect(button("View Java study circle")).toBeDefined();
-  expect(document.body.textContent).toContain("Refreshing groups…");
+  expect(document.querySelector(".refresh").textContent).toContain("Refreshing…");
+  expect(document.body.textContent).not.toContain("Loading groups…");
+  expect(button("Create group").disabled).toBe(false);
   finish();
   await settle();
   expect(button("View Updated on the server")).toBeDefined();
-  expect(document.body.textContent).not.toContain("Refreshing groups…");
+  expect(document.body.textContent).not.toContain("Refreshing…");
+});
+
+test("a background refresh does not block creating a group or reset its draft", async () => {
+  await mountPage();
+  const finish = pauseOverview();
+  await click("Refresh");
+  await click("Create group");
+  await fill('input[maxlength="100"]', "Draft during refresh");
+  finish();
+  await settle();
+  expect(topDialog().querySelector('input[maxlength="100"]').value).toBe(
+    "Draft during refresh",
+  );
 });
 
 test("logout while away clears saved groups even when the same account logs in again", async () => {

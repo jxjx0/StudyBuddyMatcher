@@ -171,7 +171,7 @@ function viewGroup(id) {
       </div>
       <button
         class="primary-button"
-        :disabled="loading || busy || !courses.length"
+        :disabled="busy || !courses.length"
         @click="edit()"
       >
         <Plus :size="18" />Create group
@@ -187,7 +187,8 @@ function viewGroup(id) {
       >
         {{ view.label }}</button
       ><button class="refresh" :disabled="loading || busy" @click="load">
-        Refresh
+        <span v-if="loaded && loading" role="status">Refreshing…</span>
+        <span v-else>Refresh</span>
       </button>
     </div>
     <div
@@ -207,9 +208,7 @@ function viewGroup(id) {
     >
       {{ notice }}
     </p>
-    <p v-if="loading" role="status">
-      {{ loaded ? "Refreshing groups…" : "Loading groups…" }}
-    </p>
+    <p v-if="loading && !loaded" role="status">Loading groups…</p>
     <p v-if="detailLoading" role="status">Opening group…</p>
     <template v-if="loaded && tab !== 'requests'">
       <div
