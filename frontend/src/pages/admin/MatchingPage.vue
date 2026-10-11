@@ -25,6 +25,9 @@ const lockedKey = computed(() => {
   if (matchingStrategy.value === "availability") return "availability";
   return "";
 });
+const enabledCriterionCount = computed(() =>
+  Object.values(matchingEnabled.value).filter(Boolean).length,
+);
 const maximumWeight = computed(() =>
   lockedKey.value ? matchingWeights.value[lockedKey.value] - 1 : 100,
 );

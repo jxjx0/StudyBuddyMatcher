@@ -28,3 +28,6 @@ management:
     web:
       exposure:
         include: health,info
+
+matching:
+  full-overlap-minutes: ${MATCHING_FULL_OVERLAP_MINUTES:120}

@@ -5,14 +5,10 @@ import java.util.Map;
 
 import com.studybuddy.matching.dto.CourseDto;
 
-/**
- * What a student is searching for.
- *
- * The UML holds a Course object here. Across a service boundary that is not
- * possible, and this arrives as JSON from the browser, so it carries the
- * course code instead.
- */
 public class SearchCriteria {
+
+	public static final String FILTER_MEETING_MODE = "meetingMode";
+	public static final String FILTER_MIN_OVERLAP_MINUTES = "minOverlapMinutes";
 
 	private CourseDto course;
 	private StudyGoal studyGoal;
@@ -42,6 +38,6 @@ public class SearchCriteria {
 	}
 
 	public void setFilters(Map<String, Object> filters) {
-		this.filters = filters;
+		this.filters = filters == null ? new HashMap<>() : new HashMap<>(filters);
 	}
 }

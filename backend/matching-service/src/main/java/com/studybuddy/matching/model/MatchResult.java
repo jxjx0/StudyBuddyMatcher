@@ -4,13 +4,8 @@ import com.studybuddy.matching.dto.StudentDto;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
-/**
- * One candidate in a ranked list of matches, with the score that put it there.
- *
- * The candidate is a StudentDto rather than a Student - matching-service does
- * not own the Student class, it receives student data from user-service.
- */
 public class MatchResult {
 
 	private StudentDto candidate;
@@ -54,7 +49,9 @@ public class MatchResult {
 		this.matchedCriteria = new ArrayList<>();
 		if (matchedCriteria != null) {
 			for (String name : matchedCriteria) {
-				this.matchedCriteria.add(CriterionType.valueOf(name));
+				if (name != null && !name.isBlank()) {
+					this.matchedCriteria.add(CriterionType.valueOf(name.trim().toUpperCase(Locale.ROOT)));
+				}
 			}
 		}
 	}

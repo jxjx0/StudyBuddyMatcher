@@ -6,11 +6,13 @@ import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.studybuddy.matching.client.StudentClient;
@@ -28,20 +30,15 @@ import com.studybuddy.matching.model.StudyGoal;
 import com.studybuddy.matching.model.TimeSlot;
 import com.studybuddy.matching.service.MatchingConfigurationService;
 
-/**
- * Scores candidate students against a searching student and returns them
- * ranked.
- *
- * Candidates come from user-service over HTTP, not from local storage - this
- * service owns no student data. Weights come from the active MatchingConfig,
- * so the engine does not change when an administrator reconfigures matching.
- */
 @Service
 public class MatchingEngine {
 
 	private static final Logger log = LoggerFactory.getLogger(MatchingEngine.class);
 
-	private static final int FULL_OVERLAP_MINUTES = 120;
+	private static final int DEFAULT_FULL_OVERLAP_MINUTES = 120;
+
+	@Value("${matching.full-overlap-minutes:120}")
+	private int fullOverlapMinutes = DEFAULT_FULL_OVERLAP_MINUTES;
 
 	// The UML shows currentConfig as a field. It is read into a local variable on
 	// each search instead: Spring shares one MatchingEngine across all requests,
@@ -59,12 +56,23 @@ public class MatchingEngine {
 			return List.of();
 		}
 		MatchingConfig currentConfig = configService.getCurrentConfig();
-		// The weights are the same for every candidate, so they are worked out once per search.
+		// The weights and filters are resolved once per search, rather than once per candidate.
 		List<MatchingCriterion> weights = resolveWeights(currentConfig);
 		SearchCriteria filters = criteria == null ? new SearchCriteria() : criteria;
+		String requestedCourseCode = filters.getCourse() == null ? null : filters.getCourse().getCourseCode();
+		String courseCode = requestedCourseCode == null || requestedCourseCode.isBlank()
+				? null : normalizeCourseCode(requestedCourseCode);
+		StudyGoal studyGoal = filters.getStudyGoal();
+		MeetingMode meetingMode = readMeetingMode(filters);
+		int minOverlapMinutes = readMinOverlapMinutes(filters);
+
+		List<StudentDto> candidates = studentClient.findAllStudents();
+		if (candidates == null || candidates.isEmpty()) {
+			return List.of();
+		}
 
 		List<MatchResult> results = new ArrayList<>();
-		for (StudentDto candidate : studentClient.findAllStudents()) {
+		for (StudentDto candidate : candidates) {
 			if (candidate == null) {
 				continue;
 			}
@@ -74,7 +82,7 @@ public class MatchingEngine {
 			if (candidate.getAccountStatus() != null && candidate.getAccountStatus() != AccountStatus.ACTIVE) {
 				continue;
 			}
-			if (!passesFilters(student, candidate, filters)) {
+			if (!passesFilters(student, candidate, courseCode, studyGoal, meetingMode, minOverlapMinutes)) {
 				continue;
 			}
 			Map<CriterionType, Double> components = scoreComponents(student, candidate);
@@ -86,10 +94,16 @@ public class MatchingEngine {
 	}
 
 	public double computeScore(StudentDto a, StudentDto b, MatchingConfig config) {
+		if (a == null || b == null) {
+			return 0;
+		}
 		return weightedScore(scoreComponents(a, b), resolveWeights(config));
 	}
 
 	public double scoreCourseMatch(StudentDto a, StudentDto b) {
+		if (a == null || b == null) {
+			return 0;
+		}
 		Set<String> wanted = courseCodes(a.getCoursesForStudying());
 		if (wanted.isEmpty()) {
 			wanted = courseCodes(a.getCurrentCourses());
@@ -104,17 +118,32 @@ public class MatchingEngine {
 	}
 
 	public double scoreAvailabilityOverlap(StudentDto a, StudentDto b) {
+		if (a == null || b == null) {
+			return 0;
+		}
+		if (fullOverlapMinutes <= 0) {
+			throw new IllegalStateException("matching.full-overlap-minutes must be greater than zero");
+		}
 		int minutes = totalOverlapMinutes(a, b);
-		return minutes <= 0 ? 0 : Math.min(1.0, (double) minutes / FULL_OVERLAP_MINUTES);
+		if (minutes <= 0) {
+			return 0;
+		}
+		return Math.min(1.0, (double) minutes / fullOverlapMinutes);
 	}
 
 	public double scoreStudyModeCompat(StudentDto a, StudentDto b) {
+		if (a == null || b == null) {
+			return 0;
+		}
 		return modesCompatible(a.getMeetingMode(), b.getMeetingMode()) ? 1.0 : 0.0;
 	}
 
 	public double scoreStudyGoalOverlap(StudentDto a, StudentDto b) {
-		Set<StudyGoal> goalsA = new HashSet<>(a.getStudyGoals());
-		Set<StudyGoal> goalsB = new HashSet<>(b.getStudyGoals());
+		if (a == null || b == null) {
+			return 0;
+		}
+		Set<StudyGoal> goalsA = nonNullGoals(a.getStudyGoals());
+		Set<StudyGoal> goalsB = nonNullGoals(b.getStudyGoals());
 		if (goalsA.isEmpty() || goalsB.isEmpty()) {
 			return 0;
 		}
@@ -129,6 +158,9 @@ public class MatchingEngine {
 	}
 
 	public double scoreGroupSizeCompat(StudentDto a, StudentDto b) {
+		if (a == null || b == null) {
+			return 0;
+		}
 		return groupSizesCompatible(a.getGroupSizePreference(), b.getGroupSizePreference()) ? 1.0 : 0.0;
 	}
 
@@ -149,6 +181,9 @@ public class MatchingEngine {
 	 * weights, or the administrator's weights as they are when no strategy is set.
 	 */
 	private List<MatchingCriterion> resolveWeights(MatchingConfig config) {
+		if (config == null || config.getCriteria() == null || config.getCriteria().isEmpty()) {
+			return List.of();
+		}
 		if (config.getStrategy() == null) {
 			return config.getCriteria();
 		}
@@ -164,6 +199,9 @@ public class MatchingEngine {
 	}
 
 	private double weightedScore(Map<CriterionType, Double> components, List<MatchingCriterion> weights) {
+		if (components == null || weights == null || weights.isEmpty()) {
+			return 0;
+		}
 		double totalWeight = 0;
 		double weightedSum = 0;
 		for (MatchingCriterion criterion : weights) {
@@ -178,6 +216,9 @@ public class MatchingEngine {
 
 	private List<String> matchedCriteria(Map<CriterionType, Double> components, List<MatchingCriterion> weights) {
 		List<String> matched = new ArrayList<>();
+		if (components == null || weights == null) {
+			return matched;
+		}
 		for (MatchingCriterion criterion : weights) {
 			// Same skip rule as weightedScore, so a tag only appears for criteria that counted.
 			if (criterion == null || !criterion.isEnabled() || criterion.getType() == null || criterion.getWeight() <= 0) {
@@ -190,62 +231,80 @@ public class MatchingEngine {
 		return matched;
 	}
 
-	private boolean passesFilters(StudentDto searcher, StudentDto candidate, SearchCriteria criteria) {
-		if (criteria.getCourse() != null && criteria.getCourse().getCourseCode() != null
-				&& !takesCourse(candidate, criteria.getCourse().getCourseCode())) {
+	private boolean passesFilters(StudentDto searcher, StudentDto candidate, String courseCode,
+			StudyGoal studyGoal, MeetingMode meetingMode, int minOverlapMinutes) {
+		if (courseCode != null && !takesCourse(candidate, courseCode)) {
 			return false;
 		}
-		if (criteria.getStudyGoal() != null && !candidate.getStudyGoals().contains(criteria.getStudyGoal())) {
+		if (studyGoal != null && (candidate.getStudyGoals() == null || !candidate.getStudyGoals().contains(studyGoal))) {
 			return false;
 		}
-		MeetingMode mode = readMeetingMode(criteria);
-		if (mode != null && !modesCompatible(mode, candidate.getMeetingMode())) {
+		if (meetingMode != null && !modesCompatible(meetingMode, candidate.getMeetingMode())) {
 			return false;
 		}
-		int minOverlap = readMinOverlapMinutes(criteria);
-		if (minOverlap > 0 && totalOverlapMinutes(searcher, candidate) < minOverlap) {
-			return false;
-		}
-		return true;
+		return minOverlapMinutes <= 0 || totalOverlapMinutes(searcher, candidate) >= minOverlapMinutes;
 	}
 
 	private MeetingMode readMeetingMode(SearchCriteria criteria) {
-		Object value = criteria.getFilters() == null ? null : criteria.getFilters().get("meetingMode");
+		Object value = criteria.getFilters() == null ? null
+				: criteria.getFilters().get(SearchCriteria.FILTER_MEETING_MODE);
+		if (value == null || value instanceof String text && text.isBlank()) {
+			return null;
+		}
 		if (value instanceof MeetingMode meetingMode) {
 			return meetingMode;
 		}
-		if (value instanceof String text && !text.isBlank()) {
+		if (value instanceof String text) {
 			try {
-				return MeetingMode.valueOf(text.trim().toUpperCase());
+				return MeetingMode.valueOf(text.trim().toUpperCase(Locale.ROOT));
 			} catch (IllegalArgumentException e) {
 				throw new IllegalArgumentException("meetingMode must be IN_PERSON, ONLINE or EITHER");
 			}
 		}
-		return null;
+		throw new IllegalArgumentException("meetingMode must be a string: IN_PERSON, ONLINE or EITHER");
 	}
 
 	private int readMinOverlapMinutes(SearchCriteria criteria) {
-		Object value = criteria.getFilters() == null ? null : criteria.getFilters().get("minOverlapMinutes");
-		if (value instanceof Number number) {
-			return number.intValue();
+		Object value = criteria.getFilters() == null ? null
+				: criteria.getFilters().get(SearchCriteria.FILTER_MIN_OVERLAP_MINUTES);
+		if (value == null || value instanceof String text && text.isBlank()) {
+			return 0;
 		}
-		if (value instanceof String text && !text.isBlank()) {
+
+		double parsed;
+		if (value instanceof Number number) {
+			parsed = number.doubleValue();
+		} else if (value instanceof String text) {
 			try {
-				return Integer.parseInt(text.trim());
+				parsed = Long.parseLong(text.trim());
 			} catch (NumberFormatException e) {
 				throw new IllegalArgumentException("minOverlapMinutes must be a whole number of minutes");
 			}
+		} else {
+			throw new IllegalArgumentException("minOverlapMinutes must be a whole number of minutes");
 		}
-		return 0;
+
+		// At most 10,080 minutes exist in a seven-day week. Reject negative,
+		// fractional, infinite and out-of-range values instead of truncating them.
+		if (!Double.isFinite(parsed) || parsed != Math.rint(parsed) || parsed < 0 || parsed > 10_080) {
+			throw new IllegalArgumentException("minOverlapMinutes must be a whole number between 0 and 10080");
+		}
+		return (int) parsed;
 	}
 
 	private boolean takesCourse(StudentDto student, String courseCode) {
+		if (student == null || courseCode == null || courseCode.isBlank()) {
+			return false;
+		}
 		Set<String> codes = courseCodes(student.getCoursesForStudying());
 		codes.addAll(courseCodes(student.getCurrentCourses()));
-		return codes.contains(courseCode.trim().toUpperCase());
+		return codes.contains(normalizeCourseCode(courseCode));
 	}
 
 	private int totalOverlapMinutes(StudentDto a, StudentDto b) {
+		if (a == null || b == null) {
+			return 0;
+		}
 		// Merged first, so a student's own overlapping slots cannot count the same time twice.
 		List<TimeSlot> slotsB = mergeSlots(b.getWeeklyAvailability());
 		int total = 0;
@@ -266,13 +325,14 @@ public class MatchingEngine {
 		List<TimeSlot> valid = new ArrayList<>();
 		if (slots != null) {
 			for (TimeSlot slot : slots) {
-				if (slot != null && slot.getDay() != null && slot.getStartTime() != null
-						&& slot.getEndTime() != null && slot.getEndTime().isAfter(slot.getStartTime())) {
-					valid.add(slot);
+				if (slot != null && slot.getDay() != null && !slot.getDay().isBlank()
+						&& slot.getStartTime() != null && slot.getEndTime() != null
+						&& slot.getEndTime().isAfter(slot.getStartTime())) {
+					valid.add(new TimeSlot(slot.getDay().trim(), slot.getStartTime(), slot.getEndTime()));
 				}
 			}
 		}
-		valid.sort(Comparator.comparing((TimeSlot slot) -> slot.getDay().toUpperCase())
+		valid.sort(Comparator.comparing((TimeSlot slot) -> slot.getDay().toUpperCase(Locale.ROOT))
 				.thenComparing(TimeSlot::getStartTime));
 
 		List<TimeSlot> merged = new ArrayList<>();
@@ -299,10 +359,29 @@ public class MatchingEngine {
 		}
 		for (CourseDto course : courses) {
 			if (course != null && course.getCourseCode() != null) {
-				codes.add(course.getCourseCode().trim().toUpperCase());
+				String code = normalizeCourseCode(course.getCourseCode());
+				if (!code.isEmpty()) {
+					codes.add(code);
+				}
 			}
 		}
 		return codes;
+	}
+
+	private Set<StudyGoal> nonNullGoals(List<StudyGoal> goals) {
+		Set<StudyGoal> result = new HashSet<>();
+		if (goals != null) {
+			for (StudyGoal goal : goals) {
+				if (goal != null) {
+					result.add(goal);
+				}
+			}
+		}
+		return result;
+	}
+
+	private String normalizeCourseCode(String courseCode) {
+		return courseCode == null ? "" : courseCode.trim().toUpperCase(Locale.ROOT);
 	}
 
 	private boolean modesCompatible(MeetingMode one, MeetingMode two) {

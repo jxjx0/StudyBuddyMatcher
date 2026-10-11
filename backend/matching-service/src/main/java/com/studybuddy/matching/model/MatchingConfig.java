@@ -5,14 +5,10 @@ import com.studybuddy.matching.engine.MatchingStrategy;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The matching setup currently in effect: which strategy is active and the
- * criteria it weights. Changed by an administrator at runtime.
- */
 public class MatchingConfig {
 
 	private MatchingStrategy strategy;
-	private List<MatchingCriterion> criteria = new ArrayList<>();
+	private List<MatchingCriterion> criteria = List.of();
 
 	public MatchingConfig() {
 	}
@@ -25,11 +21,27 @@ public class MatchingConfig {
 		this.strategy = strategy;
 	}
 
+	/** Returns a defensive copy so callers cannot mutate the active weights. */
 	public List<MatchingCriterion> getCriteria() {
-		return criteria;
+		List<MatchingCriterion> copy = new ArrayList<>(criteria.size());
+		for (MatchingCriterion criterion : criteria) {
+			if (criterion != null) {
+				copy.add(new MatchingCriterion(criterion.getType(), criterion.getWeight(), criterion.isEnabled()));
+			}
+		}
+		return copy;
 	}
 
+	/** Stores a defensive copy; a null list means no criteria are configured. */
 	public void setCriteria(List<MatchingCriterion> criteria) {
-		this.criteria = criteria;
+		List<MatchingCriterion> copy = new ArrayList<>();
+		if (criteria != null) {
+			for (MatchingCriterion criterion : criteria) {
+				if (criterion != null) {
+					copy.add(new MatchingCriterion(criterion.getType(), criterion.getWeight(), criterion.isEnabled()));
+				}
+			}
+		}
+		this.criteria = List.copyOf(copy);
 	}
 }
