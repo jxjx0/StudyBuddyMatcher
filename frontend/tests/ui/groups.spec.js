@@ -20,6 +20,7 @@ let failRefresh;
 let failWrite;
 let failDetail;
 let pendingWrite;
+let pendingOverview;
 
 // jsdom has no native modal lifecycle. Real focus, Escape and layout are tested in the browser.
 HTMLDialogElement.prototype.showModal = function () {
@@ -75,8 +76,17 @@ async function fakeApi(path, options = {}) {
     }
     return structuredClone(group);
   }
-  if (failRefresh && path === "/api/groups")
+  if (failRefresh && path === "/api/groups/overview")
     throw new Error("Network unavailable");
+  if (path === "/api/groups/overview") {
+    const result = {
+      groups: group.status === "ACTIVE" ? [structuredClone(group)] : [],
+      mine: group.isMember ? [structuredClone(group)] : [],
+      requests: structuredClone(ownRequests),
+    };
+    if (pendingOverview) await pendingOverview;
+    return result;
+  }
   if (path === "/api/groups")
     return group.status === "ACTIVE" ? [structuredClone(group)] : [];
   if (path === "/api/groups?scope=mine")
@@ -158,6 +168,8 @@ beforeEach(() => {
   failWrite = false;
   failDetail = false;
   pendingWrite = null;
+  pendingOverview = null;
+  token.value = "";
   token.value = "test-session";
   api.mockReset().mockImplementation(fakeApi);
   document.body.innerHTML = '<main id="main-content" tabindex="-1"></main>';
@@ -166,6 +178,139 @@ afterEach(() => {
   app?.unmount();
   app = null;
   document.body.innerHTML = "";
+});
+
+test("loading all three tabs shares one group overview request", async () => {
+  await mountPage();
+  await click("My groups");
+  await click("My requests");
+  await click("Browse groups");
+  expect(api.mock.calls.map(([path]) => path)).toEqual([
+    "/api/groups/overview",
+    "/api/courses",
+  ]);
+});
+
+function pauseOverview() {
+  let finish;
+  pendingOverview = new Promise((resolve) => {
+    finish = resolve;
+  });
+  return finish;
+}
+
+test("returning shows saved groups before the refresh finishes, then replaces them", async () => {
+  await mountPage();
+  await router.push("/away");
+  const finish = pauseOverview();
+  group.groupName = "Updated on the server";
+  await router.push("/groups");
+  await settle();
+  expect(button("View Java study circle")).toBeDefined();
+  expect(document.querySelector(".refresh").textContent).toContain(
+    "Refreshing…",
+  );
+  expect(document.body.textContent).not.toContain("Loading groups…");
+  expect(button("Create group").disabled).toBe(false);
+  finish();
+  await settle();
+  expect(button("View Updated on the server")).toBeDefined();
+  expect(document.body.textContent).not.toContain("Refreshing…");
+});
+
+test("a background refresh does not block creating a group or reset its draft", async () => {
+  await mountPage();
+  const finish = pauseOverview();
+  await click("Refresh");
+  await click("Create group");
+  await fill('input[maxlength="100"]', "Draft during refresh");
+  finish();
+  await settle();
+  expect(topDialog().querySelector('input[maxlength="100"]').value).toBe(
+    "Draft during refresh",
+  );
+});
+
+test("logout while away clears saved groups even when the same account logs in again", async () => {
+  await mountPage();
+  await router.push("/away");
+  token.value = "";
+  token.value = "test-session";
+  const finish = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  expect(document.querySelectorAll(".large-group-card")).toHaveLength(0);
+  expect(document.body.textContent).toContain("Loading groups…");
+  finish();
+  await settle();
+});
+
+test("switching accounts clears groups immediately while the new account loads", async () => {
+  await mountPage();
+  const finish = pauseOverview();
+  group.groupName = "Other account's group";
+  token.value = "other-session";
+  await nextTick();
+  expect(document.body.textContent).not.toContain("Java study circle");
+  finish();
+  await settle();
+  expect(button("View Other account's group")).toBeDefined();
+});
+
+test("a failed background refresh clears saved groups and offers retry", async () => {
+  await mountPage();
+  await router.push("/away");
+  failRefresh = true;
+  await router.push("/groups");
+  await settle();
+  expect(document.body.textContent).toContain("Network unavailable");
+  expect(document.querySelectorAll(".large-group-card")).toHaveLength(0);
+  await router.push("/away");
+  failRefresh = false;
+  const finish = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  expect(document.querySelectorAll(".large-group-card")).toHaveLength(0);
+  finish();
+  await settle();
+  expect(button("View Java study circle")).toBeDefined();
+});
+
+test("a late response from an unmounted page cannot replace the newer saved list", async () => {
+  await mountPage();
+  await router.push("/away");
+  const finishOld = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  await router.push("/away");
+  pendingOverview = null;
+  group.groupName = "Newest group";
+  await router.push("/groups");
+  await settle();
+  finishOld();
+  await settle();
+  await router.push("/away");
+  const finishNew = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  expect(button("View Newest group")).toBeDefined();
+  finishNew();
+  await settle();
+});
+
+test("saved edits are used when returning before another refresh completes", async () => {
+  await mountPage();
+  await openGroup();
+  await click("Edit group");
+  await fill('input[maxlength="100"]', "Saved group name");
+  await click("Save group", topDialog());
+  await router.push("/away");
+  const finish = pauseOverview();
+  await router.push("/groups");
+  await settle();
+  expect(button("View Saved group name")).toBeDefined();
+  finish();
+  await settle();
 });
 
 test("Done dismisses details without ending the group", async () => {
@@ -182,7 +327,9 @@ test("the safe confirmation action and Escape both keep the group active", async
   await openGroup();
   await click("End group…");
   expect(topDialog().textContent).toContain("will close permanently");
-  expect(topDialog().textContent).toContain("Pending requests will be rejected");
+  expect(topDialog().textContent).toContain(
+    "Pending requests will be rejected",
+  );
   await click("Keep group active", topDialog());
   await click("End group…");
   topDialog().dispatchEvent(new Event("cancel", { cancelable: true }));
@@ -506,6 +653,56 @@ test("filtered empty results offer a reset that restores the visible group", asy
     "No groups match your filters",
   );
   await click("Reset filters", document.querySelector(".empty-state"));
+  expect(button("View Java study circle")).toBeDefined();
+});
+
+test("group filters work together and keep either-mode, flexible groups visible", async () => {
+  group.meetingMode = "EITHER";
+  await mountPage();
+  await click("More filters");
+
+  async function setFilter(label, value) {
+    const field = [...document.querySelectorAll("label.field")].find(
+      (element) => element.querySelector("span")?.textContent === label,
+    );
+    const input = field.querySelector("select, input");
+    input.value = value;
+    const eventType = input.tagName === "SELECT" ? "change" : "input";
+    input.dispatchEvent(new Event(eventType, { bubbles: true }));
+    await settle();
+  }
+
+  await setFilter("Course", "IS442");
+  await setFilter("Study goal", "CONCEPT_REVIEW");
+  await setFilter("Meeting mode", "IN_PERSON");
+  await setFilter("Day", "TUESDAY");
+  await setFilter("Maximum group size", "3");
+  expect(button("View Java study circle")).toBeDefined();
+
+  await setFilter("Maximum group size", "2");
+  expect(document.querySelector(".group-cards")).toBeNull();
+  await setFilter("Maximum group size", "3");
+  await setFilter("Study goal", "EXAM_PREPARATION");
+  expect(document.querySelector(".group-cards")).toBeNull();
+  await setFilter("Study goal", "CONCEPT_REVIEW");
+
+  group.meetingMode = "ONLINE";
+  group.availability = [
+    { day: "MONDAY", startTime: "18:00", endTime: "19:00" },
+  ];
+  await click("Refresh");
+  expect(document.querySelector(".group-cards")).toBeNull();
+  await setFilter("Meeting mode", "ONLINE");
+  expect(document.querySelector(".group-cards")).toBeNull();
+  await setFilter("Day", "MONDAY");
+  expect(button("View Java study circle")).toBeDefined();
+
+  await click("Reset filters");
+  for (const input of document.querySelectorAll(
+    ".filter-surface select, .filter-surface input",
+  )) {
+    expect(input.value).toBe("");
+  }
   expect(button("View Java study circle")).toBeDefined();
 });
 

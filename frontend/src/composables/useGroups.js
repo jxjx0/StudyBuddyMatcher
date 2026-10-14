@@ -2,6 +2,16 @@ import { ref, watch, onScopeDispose } from "vue";
 import { token } from "./useAuth";
 import { api } from "../services/api";
 
+// Keep the last successful list only for this login session, even when the page unmounts.
+let cachedOverview = null;
+watch(
+  token,
+  () => {
+    cachedOverview = null;
+  },
+  { flush: "sync" },
+);
+
 export function useGroups() {
   const groups = ref([]);
   const mine = ref([]);
@@ -11,68 +21,112 @@ export function useGroups() {
   const leaderRequests = ref([]);
   const detailLoading = ref(false);
   const loading = ref(false);
+  const loaded = ref(false);
   const busy = ref(false);
   const error = ref("");
   // Ignore responses from an older refresh, closed detail, or unmounted page.
-  let version = 0;
-  let detailVersion = 0;
-  let disposed = false;
-  let controller = null;
+  let overviewVersion = 0;
+  let detailsVersion = 0;
+  let isDisposed = false;
+  let overviewController = null;
+
+  function showOverview(overview, courseList) {
+    groups.value = overview.groups;
+    mine.value = overview.mine;
+    requests.value = overview.requests;
+    courses.value = courseList;
+    loaded.value = true;
+  }
+
+  function clearOverview() {
+    groups.value = [];
+    mine.value = [];
+    requests.value = [];
+    courses.value = [];
+    loaded.value = false;
+  }
+
+  function isCurrentOverview(requestVersion) {
+    return !isDisposed && requestVersion === overviewVersion;
+  }
+
+  function isCurrentDetail(overviewAtStart, requestVersion) {
+    return (
+      isCurrentOverview(overviewAtStart) && requestVersion === detailsVersion
+    );
+  }
+
+  function isCurrentSession(sessionToken) {
+    return !isDisposed && token.value === sessionToken;
+  }
+
   async function load() {
-    const current = ++version;
-    controller?.abort();
-    controller = new AbortController();
+    const startingOverviewVersion = ++overviewVersion;
+    overviewController?.abort();
+    overviewController = new AbortController();
     loading.value = true;
     error.value = "";
     try {
-      const result = await Promise.all(
-        [
-          "/api/groups",
-          "/api/groups?scope=mine",
-          "/api/groups/join-requests/mine",
-          "/api/courses",
-        ].map((path) => api(path, { signal: controller.signal })),
-      );
-      if (disposed || current !== version) return false;
-      [groups.value, mine.value, requests.value, courses.value] = result;
+      const options = { signal: overviewController.signal };
+      const [overview, courseList] = await Promise.all([
+        api("/api/groups/overview", options),
+        api("/api/courses", options),
+      ]);
+      if (!isCurrentOverview(startingOverviewVersion)) return false;
+      showOverview(overview, courseList);
+      cachedOverview = { sessionToken: token.value, overview, courseList };
       return true;
-    } catch (e) {
-      if (current === version && !disposed && e.name !== "AbortError")
-        error.value = e.message;
+    } catch (problem) {
+      if (
+        isCurrentOverview(startingOverviewVersion) &&
+        problem.name !== "AbortError"
+      ) {
+        cachedOverview = null;
+        clearOverview();
+        error.value = problem.message;
+      }
       return false;
     } finally {
-      if (current === version && !disposed) loading.value = false;
+      if (isCurrentOverview(startingOverviewVersion)) loading.value = false;
     }
   }
-  async function open(id) {
-    const current = version;
-    const detail = ++detailVersion;
+
+  async function open(groupId) {
+    const startingOverviewVersion = overviewVersion;
+    const startingDetailsVersion = ++detailsVersion;
     detailLoading.value = true;
     error.value = "";
     try {
-      const group = await api(`/api/groups/${id}`);
-      const pending = group.isLeader
-        ? await api(`/api/groups/${id}/join-requests`)
-        : [];
-      if (disposed || current !== version || detail !== detailVersion)
+      const group = await api(`/api/groups/${groupId}`);
+      let groupRequests = [];
+      if (group.isLeader) {
+        groupRequests = await api(`/api/groups/${groupId}/join-requests`);
+      }
+      if (!isCurrentDetail(startingOverviewVersion, startingDetailsVersion)) {
         return false;
+      }
       selected.value = group;
-      leaderRequests.value = pending;
+      leaderRequests.value = groupRequests;
       return true;
-    } catch (e) {
-      if (current === version && detail === detailVersion && !disposed)
-        error.value = e.message;
+    } catch (problem) {
+      if (isCurrentDetail(startingOverviewVersion, startingDetailsVersion)) {
+        error.value = problem.message;
+      }
       return false;
     } finally {
-      if (detail === detailVersion && !disposed) detailLoading.value = false;
+      if (startingDetailsVersion === detailsVersion && !isDisposed) {
+        detailLoading.value = false;
+      }
     }
   }
+
   function closeDetail() {
     detailLoading.value = false;
-    ++detailVersion;
+    ++detailsVersion;
     selected.value = null;
     leaderRequests.value = [];
   }
+
   async function mutate(
     path,
     method = "POST",
@@ -82,61 +136,70 @@ export function useGroups() {
     if (busy.value) return false;
     busy.value = true;
     error.value = "";
-    const session = token.value;
-    const id = selected.value?.groupId;
-    const detail = detailVersion;
+    cachedOverview = null;
+    const sessionToken = token.value;
+    const groupId = selected.value?.groupId;
+    const startingDetailsVersion = detailsVersion;
     try {
-      await api(path, {
-        method,
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      });
-      if (disposed || token.value !== session) return false;
+      const requestOptions = { method };
+      if (body) requestOptions.body = JSON.stringify(body);
+      await api(path, requestOptions);
+      if (token.value === sessionToken) cachedOverview = null;
+      if (!isCurrentSession(sessionToken)) return false;
       if (dismissDetail) closeDetail();
-      let refreshed = await load();
-      if (disposed || token.value !== session) return false;
-      if (refreshed && id && !dismissDetail && detail === detailVersion) {
-        refreshed = await open(id);
+      let refreshSucceeded = await load();
+      if (!isCurrentSession(sessionToken)) return false;
+      const shouldRefreshDetail =
+        groupId && !dismissDetail && startingDetailsVersion === detailsVersion;
+      if (refreshSucceeded && shouldRefreshDetail) {
+        refreshSucceeded = await open(groupId);
       }
-      if (disposed || token.value !== session) return false;
-      if (!refreshed) {
+      if (!isCurrentSession(sessionToken)) return false;
+      if (!refreshSucceeded) {
         // The write succeeded. Do not leave stale actions available or invite a second save.
         closeDetail();
-        groups.value = [];
-        mine.value = [];
-        requests.value = [];
+        cachedOverview = null;
+        clearOverview();
         error.value =
           "Your change was saved, but the latest groups could not be loaded. Refresh to see the current state.";
       }
       return true;
-    } catch (e) {
-      if (!disposed && token.value === session) error.value = e.message;
+    } catch (problem) {
+      if (isCurrentSession(sessionToken)) error.value = problem.message;
       return false;
     } finally {
-      if (!disposed && token.value === session) busy.value = false;
+      if (isCurrentSession(sessionToken)) busy.value = false;
     }
   }
+
   watch(
     token,
     () => {
-      ++version;
-      ++detailVersion;
-      controller?.abort();
-      groups.value = [];
-      mine.value = [];
-      requests.value = [];
-      courses.value = [];
+      ++overviewVersion;
+      ++detailsVersion;
+      overviewController?.abort();
+      clearOverview();
       closeDetail();
       busy.value = false;
-      if (token.value) load();
+      loading.value = false;
+      error.value = "";
+      if (token.value) {
+        if (cachedOverview?.sessionToken === token.value) {
+          showOverview(cachedOverview.overview, cachedOverview.courseList);
+        }
+        load();
+      }
     },
-    { immediate: true },
+    { immediate: true, flush: "sync" },
   );
+
   onScopeDispose(() => {
-    disposed = true;
-    ++version;
-    ++detailVersion;
-    controller?.abort();
+    isDisposed = true;
+    ++overviewVersion;
+    ++detailsVersion;
+    overviewController?.abort();
   });
+
   return {
     groups,
     mine,
@@ -145,6 +208,7 @@ export function useGroups() {
     selected,
     leaderRequests,
     loading,
+    loaded,
     detailLoading,
     busy,
     error,

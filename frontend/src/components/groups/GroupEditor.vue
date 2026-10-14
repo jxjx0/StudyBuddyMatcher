@@ -176,8 +176,7 @@ function save() {
               type="number"
               :min="Math.max(2, group?.memberCount || 2)"
               step="1"
-              required
-            /></label
+              required /></label
           ><label class="field"
             ><span>Meeting mode</span
             ><select v-model="draft.meetingMode">

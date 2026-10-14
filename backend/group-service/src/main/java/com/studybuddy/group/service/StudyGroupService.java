@@ -3,110 +3,364 @@ package com.studybuddy.group.service;
 import com.studybuddy.group.client.StudentClient;
 import com.studybuddy.group.dto.*;
 import com.studybuddy.group.model.*;
-import com.studybuddy.group.repository.*;
+import com.studybuddy.group.repository.GroupJoinRequestRepository;
+import com.studybuddy.group.repository.StudyGroupRepository;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import java.util.*;
-import java.util.function.Consumer;
 
 @Service
 public class StudyGroupService {
-    private final StudyGroupRepository groups;
-    private final GroupJoinRequestRepository requests;
-    private final StudentClient students;
-    private final TransactionTemplate transaction;
-    public StudyGroupService(StudyGroupRepository groups, GroupJoinRequestRepository requests, StudentClient students, PlatformTransactionManager manager) {
-        this.groups=groups; this.requests=requests; this.students=students; transaction=new TransactionTemplate(manager);
+  private final StudyGroupRepository groupRepository;
+  private final GroupJoinRequestRepository requestRepository;
+  private final StudentClient studentClient;
+  private final TransactionTemplate transaction;
+
+  public StudyGroupService(
+      StudyGroupRepository groupRepository,
+      GroupJoinRequestRepository requestRepository,
+      StudentClient studentClient,
+      PlatformTransactionManager transactionManager) {
+    this.groupRepository = groupRepository;
+    this.requestRepository = requestRepository;
+    this.studentClient = studentClient;
+    this.transaction = new TransactionTemplate(transactionManager);
+  }
+
+  public GroupOverview overview(String currentStudentId) {
+    // Independent reads run together. Closing the executor waits for both database reads.
+    try (var reads = Executors.newVirtualThreadPerTaskExecutor()) {
+      var groupsTask = reads.submit(groupRepository::findAll);
+      var requestsTask = reads.submit(() -> requestRepository.findByStudentId(currentStudentId));
+      Map<String, StudentDto> studentsById = studentClient.students();
+      requireActiveStudent(studentsById.get(currentStudentId));
+      return buildOverview(currentStudentId, studentsById, requestsTask.get(), groupsTask.get());
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
+      throw new GroupException(
+          HttpStatus.SERVICE_UNAVAILABLE, "Group loading was interrupted. Please try again.");
+    } catch (ExecutionException exception) {
+      // Keep the same error response when a database read fails on another thread.
+      if (exception.getCause() instanceof RuntimeException cause) {
+        throw cause;
+      }
+      throw new GroupException(
+          HttpStatus.SERVICE_UNAVAILABLE, "Groups are unavailable. Please try again shortly.");
     }
-    public List<GroupView> findAll(String actor, String scope) {
-        if (!Set.of("discover","mine").contains(scope)) throw new IllegalArgumentException("Scope must be discover or mine");
-        var people=students.students(); requireActive(people.get(actor));
-        var mine=requests.findByStudentId(actor);
-        return groups.findAll().stream().filter(g -> scope.equals("mine") ? g.hasMember(actor) : g.isActive() && active(people.get(g.getLeaderId())))
-                .map(g -> view(g,actor,people,mine)).toList();
+  }
+
+  private GroupOverview buildOverview(
+      String currentStudentId,
+      Map<String, StudentDto> studentsById,
+      List<GroupJoinRequest> ownRequests,
+      List<StudyGroup> savedGroups) {
+    List<GroupView> discoverGroups = new ArrayList<>();
+    List<GroupView> memberGroups = new ArrayList<>();
+    Map<String, String> groupNames = new HashMap<>();
+
+    for (StudyGroup group : savedGroups) {
+      groupNames.put(group.getGroupId(), group.getGroupName());
+      boolean visibleToEveryone = isDiscoverable(group, studentsById);
+      boolean isMember = group.hasMember(currentStudentId);
+      if (visibleToEveryone || isMember) {
+        GroupView groupView = toGroupView(group, currentStudentId, studentsById, ownRequests);
+        if (visibleToEveryone) {
+          discoverGroups.add(groupView);
+        }
+        if (isMember) {
+          memberGroups.add(groupView);
+        }
+      }
     }
-    public GroupView findById(String id,String actor) {
-        var people=students.students(); requireActive(people.get(actor));
-        var g=group(id,false); var mine=requests.findByStudentId(actor);
-        if ((!g.isActive() || !active(people.get(g.getLeaderId()))) && !g.hasMember(actor) && mine.stream().noneMatch(r->r.getGroupId().equals(id)))
-            throw new GroupException(HttpStatus.NOT_FOUND,"Group not found");
-        return view(g,actor,people,mine);
+
+    List<JoinRequestView> requestHistory = new ArrayList<>();
+    for (GroupJoinRequest request : ownRequests) {
+      String groupName = groupNames.get(request.getGroupId());
+      requestHistory.add(toRequestView(request, groupName, studentsById));
     }
-    public String create(GroupInput input,String actor) {
-        requireActive(students.findStudent(actor));
-        if(input.courseCode()==null || input.courseCode().isBlank()) throw new IllegalArgumentException("Choose a course");
-        if(students.findCourse(input.courseCode().trim())==null) throw new GroupException(HttpStatus.NOT_FOUND,"Course not found");
-        var g=StudyGroup.create(input.groupName(),input.description(),input.courseCode(),actor,input.capacity(),input.meetingMode(),input.studyGoals(),input.availability());
-        return transaction.execute(s -> groups.save(g).getGroupId());
+    return new GroupOverview(discoverGroups, memberGroups, requestHistory);
+  }
+
+  public List<GroupView> findAll(String currentStudentId, String scope) {
+    if (!Set.of("discover", "mine").contains(scope)) {
+      throw new IllegalArgumentException("Scope must be discover or mine");
     }
-    public void update(String id,String actor,GroupInput input) {
-        mutate(id,actor,g -> {
-            if(input.courseCode()!=null && !g.getCourseCode().equals(input.courseCode())) throw new IllegalArgumentException("A group's course cannot be changed");
-            g.updateDetails(input.groupName(),input.description(),input.capacity(),input.meetingMode(),input.studyGoals(),input.availability());
+    GroupOverview overview = overview(currentStudentId);
+    if (scope.equals("mine")) {
+      return overview.mine();
+    }
+    return overview.groups();
+  }
+
+  public GroupView findById(String groupId, String currentStudentId) {
+    Map<String, StudentDto> studentsById = studentClient.students();
+    requireActiveStudent(studentsById.get(currentStudentId));
+    StudyGroup group = requireGroup(groupId, false);
+    List<GroupJoinRequest> ownRequests = requestRepository.findByStudentId(currentStudentId);
+    boolean hasRequestHistory = latestRequestStatus(groupId, ownRequests) != null;
+
+    if (!isDiscoverable(group, studentsById)
+        && !group.hasMember(currentStudentId)
+        && !hasRequestHistory) {
+      throw new GroupException(HttpStatus.NOT_FOUND, "Group not found");
+    }
+    return toGroupView(group, currentStudentId, studentsById, ownRequests);
+  }
+
+  public String create(GroupInput input, String currentStudentId) {
+    requireActiveStudent(studentClient.findStudent(currentStudentId));
+    if (input.courseCode() == null || input.courseCode().isBlank()) {
+      throw new IllegalArgumentException("Choose a course");
+    }
+    if (studentClient.findCourse(input.courseCode().trim()) == null) {
+      throw new GroupException(HttpStatus.NOT_FOUND, "Course not found");
+    }
+    StudyGroup group =
+        StudyGroup.create(
+            input.groupName(),
+            input.description(),
+            input.courseCode(),
+            currentStudentId,
+            input.capacity(),
+            input.meetingMode(),
+            input.studyGoals(),
+            input.availability());
+    return transaction.execute(transactionStatus -> groupRepository.save(group).getGroupId());
+  }
+
+  public void update(String groupId, String currentStudentId, GroupInput input) {
+    changeGroupAsLeader(
+        groupId,
+        currentStudentId,
+        group -> {
+          if (input.courseCode() != null && !group.getCourseCode().equals(input.courseCode())) {
+            throw new IllegalArgumentException("A group's course cannot be changed");
+          }
+          group.updateDetails(
+              input.groupName(),
+              input.description(),
+              input.capacity(),
+              input.meetingMode(),
+              input.studyGoals(),
+              input.availability());
         });
-    }
-    public void close(String id,String actor) {
-        mutate(id,actor,g -> {
-            g.close();
-            for(var r:requests.findByGroupId(id)) if(r.isPending()) { r.reject(); requests.save(r); }
+  }
+
+  public void close(String groupId, String currentStudentId) {
+    changeGroupAsLeader(
+        groupId,
+        currentStudentId,
+        group -> {
+          group.close();
+          for (GroupJoinRequest request : requestRepository.findByGroupId(groupId)) {
+            if (request.isPending()) {
+              request.reject();
+              requestRepository.save(request);
+            }
+          }
         });
-    }
-    public void removeMember(String id,String actor,String member) { mutate(id,actor,g -> g.removeMember(member)); }
-    private void mutate(String id,String actor,Consumer<StudyGroup> action) {
-        requireActive(students.findStudent(actor));
-        transaction.executeWithoutResult(s -> { var g=group(id,true); requireLeader(g,actor); action.accept(g); groups.save(g); });
-    }
-    public GroupJoinRequest requestToJoin(String id,String actor) {
-        requireActive(students.findStudent(actor));
-        var snapshot=group(id,false); requireActive(students.findStudent(snapshot.getLeaderId()));
-        return transaction.execute(s -> {
-            var g=group(id,true); g.requireActive();
-            if(g.hasMember(actor)) throw new IllegalStateException("You are already a member");
-            if(g.isFull()) throw new IllegalStateException("This group is full");
-            if(requests.findByGroupId(id).stream().anyMatch(r -> r.getStudentId().equals(actor) && r.isPending()))
-                throw new IllegalStateException("You already have a pending request");
-            return requests.save(GroupJoinRequest.create(actor,id));
+  }
+
+  public void removeMember(String groupId, String currentStudentId, String memberId) {
+    changeGroupAsLeader(groupId, currentStudentId, group -> group.removeMember(memberId));
+  }
+
+  private void changeGroupAsLeader(
+      String groupId, String currentStudentId, Consumer<StudyGroup> change) {
+    requireActiveStudent(studentClient.findStudent(currentStudentId));
+    transaction.executeWithoutResult(
+        transactionStatus -> {
+          StudyGroup group = requireGroup(groupId, true);
+          requireLeader(group, currentStudentId);
+          change.accept(group);
+          groupRepository.save(group);
         });
-    }
-    public GroupJoinRequest decide(String id,String actor,boolean accept) {
-        requireActive(students.findStudent(actor));
-        var snapshot=request(id,false); requireLeader(group(snapshot.getGroupId(),false),actor);
-        if(accept) requireActive(students.findStudent(snapshot.getStudentId()));
-        return transaction.execute(s -> {
-            // Every writer locks group first, request second. No HTTP work while locks are held.
-            var g=group(snapshot.getGroupId(),true); requireLeader(g,actor); g.requireActive();
-            var r=request(id,true);
-            if(accept) { r.accept(); g.addMember(r.getStudentId()); groups.save(g); }
-            else r.reject();
-            return requests.save(r);
+  }
+
+  public GroupJoinRequest requestToJoin(String groupId, String currentStudentId) {
+    requireActiveStudent(studentClient.findStudent(currentStudentId));
+    StudyGroup groupBeforeLock = requireGroup(groupId, false);
+    requireActiveStudent(studentClient.findStudent(groupBeforeLock.getLeaderId()));
+
+    return transaction.execute(
+        transactionStatus -> {
+          StudyGroup group = requireGroup(groupId, true);
+          group.requireActive();
+          if (group.hasMember(currentStudentId)) {
+            throw new IllegalStateException("You are already a member");
+          }
+          if (group.isFull()) {
+            throw new IllegalStateException("This group is full");
+          }
+          for (GroupJoinRequest request : requestRepository.findByGroupId(groupId)) {
+            if (request.getStudentId().equals(currentStudentId) && request.isPending()) {
+              throw new IllegalStateException("You already have a pending request");
+            }
+          }
+          return requestRepository.save(GroupJoinRequest.create(currentStudentId, groupId));
         });
+  }
+
+  public GroupJoinRequest decide(String requestId, String currentStudentId, boolean accept) {
+    requireActiveStudent(studentClient.findStudent(currentStudentId));
+    GroupJoinRequest requestBeforeLock = requireRequest(requestId, false);
+    StudyGroup groupBeforeLock = requireGroup(requestBeforeLock.getGroupId(), false);
+    requireLeader(groupBeforeLock, currentStudentId);
+    if (accept) {
+      requireActiveStudent(studentClient.findStudent(requestBeforeLock.getStudentId()));
     }
-    public List<JoinRequestView> findJoinRequests(String id,String actor) {
-        var people=students.students(); requireActive(people.get(actor));
-        var g=group(id,false); requireLeader(g,actor);
-        return requests.findByGroupId(id).stream().map(r->requestView(r,g.getGroupName(),people)).toList();
+
+    return transaction.execute(
+        transactionStatus -> {
+          // Always lock the group before the request. Do not make HTTP calls while holding locks.
+          StudyGroup group = requireGroup(requestBeforeLock.getGroupId(), true);
+          requireLeader(group, currentStudentId);
+          group.requireActive();
+          GroupJoinRequest request = requireRequest(requestId, true);
+          if (accept) {
+            request.accept();
+            group.addMember(request.getStudentId());
+            groupRepository.save(group);
+          } else {
+            request.reject();
+          }
+          return requestRepository.save(request);
+        });
+  }
+
+  public List<JoinRequestView> findJoinRequests(String groupId, String currentStudentId) {
+    Map<String, StudentDto> studentsById = studentClient.students();
+    requireActiveStudent(studentsById.get(currentStudentId));
+    StudyGroup group = requireGroup(groupId, false);
+    requireLeader(group, currentStudentId);
+
+    List<JoinRequestView> requestViews = new ArrayList<>();
+    for (GroupJoinRequest request : requestRepository.findByGroupId(groupId)) {
+      requestViews.add(toRequestView(request, group.getGroupName(), studentsById));
     }
-    public List<JoinRequestView> myRequests(String actor) {
-        var people=students.students(); requireActive(people.get(actor));
-        Map<String,String> names=new HashMap<>(); groups.findAll().forEach(g->names.put(g.getGroupId(),g.getGroupName()));
-        return requests.findByStudentId(actor).stream().map(r->requestView(r,names.get(r.getGroupId()),people)).toList();
+    return List.copyOf(requestViews);
+  }
+
+  public List<JoinRequestView> myRequests(String currentStudentId) {
+    return overview(currentStudentId).requests();
+  }
+
+  private JoinRequestView toRequestView(
+      GroupJoinRequest request, String groupName, Map<String, StudentDto> studentsById) {
+    StudentDto student = studentsById.get(request.getStudentId());
+    String studentName = student == null ? "Unavailable student" : student.getName();
+    return new JoinRequestView(
+        request.getGroupJoinRequestId(),
+        request.getStudentId(),
+        studentName,
+        request.getGroupId(),
+        groupName,
+        request.getStatus(),
+        request.getCreatedAt(),
+        request.getRespondedAt());
+  }
+
+  private GroupView toGroupView(
+      StudyGroup group,
+      String currentStudentId,
+      Map<String, StudentDto> studentsById,
+      List<GroupJoinRequest> ownRequests) {
+    GroupJoinRequestStatus requestStatus = latestRequestStatus(group.getGroupId(), ownRequests);
+    boolean leaderAvailable = isActiveStudent(studentsById.get(group.getLeaderId()));
+    boolean isMember = group.hasMember(currentStudentId);
+    boolean canRequest =
+        group.isActive()
+            && leaderAvailable
+            && !group.isFull()
+            && !isMember
+            && requestStatus != GroupJoinRequestStatus.PENDING;
+
+    List<GroupView.Member> members = new ArrayList<>();
+    for (String memberId : group.getMemberIds()) {
+      StudentDto student = studentsById.get(memberId);
+      String memberName = student == null ? "Unavailable student" : student.getName();
+      members.add(new GroupView.Member(memberId, memberName, isActiveStudent(student)));
     }
-    private JoinRequestView requestView(GroupJoinRequest r,String name,Map<String,StudentDto> people) {
-        var student=people.get(r.getStudentId());
-        return new JoinRequestView(r.getGroupJoinRequestId(),r.getStudentId(),student==null?"Unavailable student":student.getName(),r.getGroupId(),name,r.getStatus(),r.getCreatedAt(),r.getRespondedAt());
+    return new GroupView(
+        group.getGroupId(),
+        group.getGroupName(),
+        group.getDescription(),
+        group.getCourseCode(),
+        group.getStudyGoals(),
+        group.getMeetingMode(),
+        group.getAvailability(),
+        group.getMaxGroupSize(),
+        members.size(),
+        group.getStatus(),
+        group.getLeaderId(),
+        List.copyOf(members),
+        group.isLedBy(currentStudentId),
+        isMember,
+        leaderAvailable,
+        canRequest,
+        requestStatus);
+  }
+
+  private GroupJoinRequestStatus latestRequestStatus(
+      String groupId, List<GroupJoinRequest> ownRequests) {
+    // The repository returns the newest request first, including accepted and rejected history.
+    for (GroupJoinRequest request : ownRequests) {
+      if (request.getGroupId().equals(groupId)) {
+        return request.getStatus();
+      }
     }
-    private GroupView view(StudyGroup g,String actor,Map<String,StudentDto> people,List<GroupJoinRequest> mine) {
-        var status=mine.stream().filter(r->r.getGroupId().equals(g.getGroupId())).map(GroupJoinRequest::getStatus).findFirst().orElse(null);
-        boolean leaderAvailable=active(people.get(g.getLeaderId()));
-        var members=g.getMemberIds().stream().map(id->{var p=people.get(id); return new GroupView.Member(id,p==null?"Unavailable student":p.getName(),active(p));}).toList();
-        return new GroupView(g.getGroupId(),g.getGroupName(),g.getDescription(),g.getCourseCode(),g.getStudyGoals(),g.getMeetingMode(),g.getAvailability(),g.getMaxGroupSize(),members.size(),g.getStatus(),g.getLeaderId(),members,g.isLedBy(actor),g.hasMember(actor),leaderAvailable,
-            g.isActive() && leaderAvailable && !g.isFull() && !g.hasMember(actor) && status!=GroupJoinRequestStatus.PENDING,status);
+    return null;
+  }
+
+  private boolean isDiscoverable(StudyGroup group, Map<String, StudentDto> studentsById) {
+    return group.isActive() && isActiveStudent(studentsById.get(group.getLeaderId()));
+  }
+
+  private StudyGroup requireGroup(String groupId, boolean lockForUpdate) {
+    Optional<StudyGroup> savedGroup;
+    if (lockForUpdate) {
+      savedGroup = groupRepository.lockById(groupId);
+    } else {
+      savedGroup = groupRepository.findById(groupId);
     }
-    private StudyGroup group(String id,boolean lock) { return (lock?groups.lockById(id):groups.findById(id)).orElseThrow(()->new GroupException(HttpStatus.NOT_FOUND,"Group not found")); }
-    private GroupJoinRequest request(String id,boolean lock) { return (lock?requests.lockById(id):requests.findById(id)).orElseThrow(()->new GroupException(HttpStatus.NOT_FOUND,"Request not found")); }
-    private void requireLeader(StudyGroup g,String actor) { if(!g.isLedBy(actor)) throw new GroupException(HttpStatus.FORBIDDEN,"Only the group leader can do this"); }
-    private boolean active(StudentDto p) { return p!=null && p.getAccountStatus()==AccountStatus.ACTIVE; }
-    private void requireActive(StudentDto p) { if(!active(p)) throw new GroupException(HttpStatus.FORBIDDEN,"An active student profile is required"); }
+    return savedGroup.orElseThrow(
+        () -> new GroupException(HttpStatus.NOT_FOUND, "Group not found"));
+  }
+
+  private GroupJoinRequest requireRequest(String requestId, boolean lockForUpdate) {
+    Optional<GroupJoinRequest> savedRequest;
+    if (lockForUpdate) {
+      savedRequest = requestRepository.lockById(requestId);
+    } else {
+      savedRequest = requestRepository.findById(requestId);
+    }
+    return savedRequest.orElseThrow(
+        () -> new GroupException(HttpStatus.NOT_FOUND, "Request not found"));
+  }
+
+  private void requireLeader(StudyGroup group, String currentStudentId) {
+    if (!group.isLedBy(currentStudentId)) {
+      throw new GroupException(HttpStatus.FORBIDDEN, "Only the group leader can do this");
+    }
+  }
+
+  private boolean isActiveStudent(StudentDto student) {
+    return student != null && student.getAccountStatus() == AccountStatus.ACTIVE;
+  }
+
+  private void requireActiveStudent(StudentDto student) {
+    if (!isActiveStudent(student)) {
+      throw new GroupException(HttpStatus.FORBIDDEN, "An active student profile is required");
+    }
+  }
 }
