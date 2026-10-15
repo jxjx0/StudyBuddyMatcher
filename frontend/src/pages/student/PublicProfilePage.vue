@@ -65,7 +65,7 @@ onScopeDispose(() => controller?.abort());
           <dd>{{ selectedProfile.school || "Not specified" }}</dd>
         </div>
         <div>
-          <dt>Course needing a buddy</dt>
+          <dt>Courses needing a buddy</dt>
           <dd>{{ selectedProfile.course || "Not specified" }}</dd>
         </div>
         <div>
