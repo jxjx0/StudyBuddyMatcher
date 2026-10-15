@@ -1,5 +1,6 @@
 package com.studybuddy.matching.engine;
 
+import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -12,7 +13,6 @@ import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.studybuddy.matching.client.StudentClient;
@@ -34,11 +34,6 @@ import com.studybuddy.matching.service.MatchingConfigurationService;
 public class MatchingEngine {
 
 	private static final Logger log = LoggerFactory.getLogger(MatchingEngine.class);
-
-	private static final int DEFAULT_FULL_OVERLAP_MINUTES = 120;
-
-	@Value("${matching.full-overlap-minutes:120}")
-	private int fullOverlapMinutes = DEFAULT_FULL_OVERLAP_MINUTES;
 
 	// The UML shows currentConfig as a field. It is read into a local variable on
 	// each search instead: Spring shares one MatchingEngine across all requests,
@@ -121,14 +116,14 @@ public class MatchingEngine {
 		if (a == null || b == null) {
 			return 0;
 		}
-		if (fullOverlapMinutes <= 0) {
-			throw new IllegalStateException("matching.full-overlap-minutes must be greater than zero");
-		}
 		int minutes = totalOverlapMinutes(a, b);
 		if (minutes <= 0) {
 			return 0;
 		}
-		return Math.min(1.0, (double) minutes / fullOverlapMinutes);
+		// The share of the searcher's (a's) free time that the candidate can also make, like
+		// scoreCourseMatch counts the searcher's courses. Scores can differ by who searches.
+		int searcherFreeMinutes = totalFreeMinutes(a);
+		return Math.min(1.0, (double) minutes / searcherFreeMinutes);
 	}
 
 	public double scoreStudyModeCompat(StudentDto a, StudentDto b) {
@@ -312,6 +307,15 @@ public class MatchingEngine {
 			for (TimeSlot slotB : slotsB) {
 				total += slotA.overlapMinutes(slotB);
 			}
+		}
+		return total;
+	}
+
+	private int totalFreeMinutes(StudentDto student) {
+		// Merged first, so a student's own overlapping slots cannot count the same time twice.
+		int total = 0;
+		for (TimeSlot slot : mergeSlots(student.getWeeklyAvailability())) {
+			total += (int) Duration.between(slot.getStartTime(), slot.getEndTime()).toMinutes();
 		}
 		return total;
 	}
