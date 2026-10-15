@@ -291,9 +291,8 @@ public class MatchingEngine {
 		if (student == null || courseCode == null || courseCode.isBlank()) {
 			return false;
 		}
-		Set<String> codes = courseCodes(student.getCoursesForStudying());
-		codes.addAll(courseCodes(student.getCurrentCourses()));
-		return codes.contains(normalizeCourseCode(courseCode));
+		// Only courses the candidate wants a study buddy for; merely taking the course is not enough.
+		return courseCodes(student.getCoursesForStudying()).contains(normalizeCourseCode(courseCode));
 	}
 
 	private int totalOverlapMinutes(StudentDto a, StudentDto b) {
