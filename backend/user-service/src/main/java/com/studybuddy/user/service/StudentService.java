@@ -47,6 +47,7 @@ public class StudentService {
 				student.getContactNumber());
 	}
 
+	//@Transactional = "undo everything if something goes wrong" 
 	@Transactional
 	public StudentDto create(StudentRequest request) {
 		Student student = new Student(null, request.getEmail(), request.getPassword(), AccountStatus.ACTIVE);
@@ -67,6 +68,7 @@ public class StudentService {
 
 	// Profiles are kept in both user_accounts.profile_data and the students table for now.
 	// Callers are @Transactional, so if either write fails neither is kept.
+	// E.g. if the write 1 were to fail, the write 2 would be rolled back, and vice versa.
 	private Student save(Student student) {
 		// Students loaded from the students table carry no password hash, and UserRepository.save
 		// writes every account column, so copy the stored hash across before saving.
@@ -83,6 +85,7 @@ public class StudentService {
 				.orElseThrow(() -> new AccountNotFoundException("Student not found"));
 	}
 
+	// apply() copies the data from a StudentRequest (the incoming JSON) onto a Student object.
 	private void apply(Student student, StudentRequest request) {
 		student.updateProfile(request.getName(), request.getSchool(), request.getProgramme(),
 				request.getYearOfStudy(), request.getContactNumber());
