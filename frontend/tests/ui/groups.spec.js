@@ -440,12 +440,12 @@ test("successful join does not reload the group details", async () => {
   group.canRequest = true;
   await mountPage();
   await openGroup();
-  const detailsReads = api.mock.calls.filter(([path]) =>
-    path === "/api/groups/group-1",
+  const detailsReads = api.mock.calls.filter(
+    ([path]) => path === "/api/groups/group-1",
   ).length;
   await click("Request to join", topDialog());
   expect(topDialog().textContent).toContain("Join request sent");
-  expect(topDialog().textContent).toContain("Request pending");
+  expect(button("Cancel request", topDialog())).toBeDefined();
   expect(
     api.mock.calls.filter(([path]) => path === "/api/groups/group-1"),
   ).toHaveLength(detailsReads);
@@ -462,7 +462,9 @@ test("eligible group cards can request to join and immediately show pending stat
   await click("Request to join Java study circle");
 
   expect(button("View Java study circle")).toBeDefined();
-  expect(button("Request to join Java study circle")).toBeUndefined();
+  expect(
+    document.querySelector('[aria-label="Request to join Java study circle"]'),
+  ).toBeNull();
   expect(document.body.textContent).toContain("Request pending");
   expect(document.body.textContent).toContain("Join request sent");
   expect(writes()).toHaveLength(1);
@@ -491,8 +493,9 @@ test("students can cancel a pending request from a group card and reapply", asyn
   expect(document.body.textContent).toContain("Join request cancelled");
   expect(writes()).toHaveLength(1);
   expect(writes()[0][1].method).toBe("DELETE");
-  expect(api.mock.calls.filter(([path]) => path === "/api/groups/overview"))
-    .toHaveLength(1);
+  expect(
+    api.mock.calls.filter(([path]) => path === "/api/groups/overview"),
+  ).toHaveLength(1);
 });
 
 test("students can cancel a pending request from the detail dialog", async () => {
@@ -542,7 +545,7 @@ test("a sent request displays feedback inside the dialog and prevents another re
   expect(topDialog().querySelector('[role="status"]').textContent).toBe(
     "Join request sent",
   );
-  expect(topDialog().textContent).toContain("Request pending");
+  expect(button("Cancel request", topDialog())).toBeDefined();
   expect(topDialog().textContent).not.toContain("Request to join");
 });
 

@@ -146,7 +146,9 @@ export function useGroups() {
       const result = await api(path, requestOptions);
       if (token.value === sessionToken) cachedOverview = null;
       if (!isCurrentSession(sessionToken)) return false;
-      const joinRequestPath = path.match(/^\/api\/groups\/([^/]+)\/join-requests$/);
+      const joinRequestPath = path.match(
+        /^\/api\/groups\/([^/]+)\/join-requests$/,
+      );
       if (
         method === "POST" &&
         joinRequestPath &&
@@ -169,9 +171,9 @@ export function useGroups() {
               request.groupJoinRequestId === result.groupJoinRequestId,
           )
         ) {
-          const updatedGroup = groups.value.find(
-            (group) => group.groupId === result.groupId,
-          ) || selected.value;
+          const updatedGroup =
+            groups.value.find((group) => group.groupId === result.groupId) ||
+            selected.value;
           requests.value = [
             {
               groupJoinRequestId: result.groupJoinRequestId,
