@@ -135,6 +135,38 @@ class GroupIntegrationTest {
   }
 
   @Test
+  void requesterCanCancelPendingRequestAndSubmitAnother() {
+    String id = create(3);
+    var original = service.requestToJoin(id, B);
+
+    var cancelled = service.cancelJoinRequest(id, B);
+
+    assertEquals(GroupJoinRequestStatus.CANCELLED, cancelled.getStatus());
+    assertNotNull(cancelled.getRespondedAt());
+    assertEquals(
+        GroupJoinRequestStatus.CANCELLED,
+        requests.findById(original.getGroupJoinRequestId()).orElseThrow().getStatus());
+    assertEquals(1, service.myRequests(B).size());
+    var retry = service.requestToJoin(id, B);
+    assertNotEquals(original.getGroupJoinRequestId(), retry.getGroupJoinRequestId());
+  }
+
+  @Test
+  void inactiveRequesterCanCancelTheirExistingPendingRequest() {
+    String id = create(3);
+    var request = service.requestToJoin(id, B);
+    var inactiveStudent = students.findStudent(B);
+    inactiveStudent.setAccountStatus(AccountStatus.DELETED);
+
+    var cancelled = service.cancelJoinRequest(id, B);
+
+    assertEquals(GroupJoinRequestStatus.CANCELLED, cancelled.getStatus());
+    assertEquals(
+        GroupJoinRequestStatus.CANCELLED,
+        requests.findById(request.getGroupJoinRequestId()).orElseThrow().getStatus());
+  }
+
+  @Test
   void twoConcurrentApprovalsCannotTakeOneRemainingPlace() throws Exception {
     String id = create(2);
     var b = service.requestToJoin(id, B);
@@ -513,6 +545,38 @@ class GroupIntegrationTest {
     assertEquals(403, get("/api/groups/" + id + "/join-requests", token).statusCode());
     assertEquals("[]", get("/api/groups/join-requests/mine", token).body());
     assertEquals(400, get("/api/groups/not-a-uuid", token).statusCode());
+  }
+
+  @Test
+  void onlyTheRequesterCanCancelAPendingRequestThroughTheApi() throws Exception {
+    String id = create(3);
+    var request = service.requestToJoin(id, B);
+    String otherStudentToken =
+        token(C, SECRET, "studybuddy-user-service", 3600, "ROLE_STUDENT");
+    var unauthorizedDelete =
+        HttpRequest.newBuilder(
+                URI.create("http://127.0.0.1:" + port + "/api/groups/" + id + "/join-requests"))
+            .header("Authorization", "Bearer " + otherStudentToken)
+            .DELETE()
+            .build();
+    assertEquals(
+        404, http.send(unauthorizedDelete, HttpResponse.BodyHandlers.ofString()).statusCode());
+    assertTrue(requests.findById(request.getGroupJoinRequestId()).orElseThrow().isPending());
+
+    String requesterToken =
+        token(B, SECRET, "studybuddy-user-service", 3600, "ROLE_STUDENT");
+    var delete =
+        HttpRequest.newBuilder(
+                URI.create("http://127.0.0.1:" + port + "/api/groups/" + id + "/join-requests"))
+            .header("Authorization", "Bearer " + requesterToken)
+            .DELETE()
+            .build();
+    var response = http.send(delete, HttpResponse.BodyHandlers.ofString());
+    assertEquals(200, response.statusCode());
+    assertTrue(response.body().contains("\"status\":\"CANCELLED\""));
+    assertEquals(
+        GroupJoinRequestStatus.CANCELLED,
+        requests.findById(request.getGroupJoinRequestId()).orElseThrow().getStatus());
   }
 
   private HttpResponse<String> get(String path, String token) throws Exception {

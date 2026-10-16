@@ -110,5 +110,10 @@ class GroupDomainTest {
     var rejected = GroupJoinRequest.create(applicant, r.getGroupId());
     rejected.reject();
     assertEquals(GroupJoinRequestStatus.REJECTED, rejected.getStatus());
+    var cancelled = GroupJoinRequest.create(applicant, r.getGroupId());
+    cancelled.cancel();
+    assertEquals(GroupJoinRequestStatus.CANCELLED, cancelled.getStatus());
+    assertNotNull(cancelled.getRespondedAt());
+    assertThrows(IllegalStateException.class, cancelled::cancel);
   }
 }
