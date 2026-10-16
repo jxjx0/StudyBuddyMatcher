@@ -59,8 +59,7 @@ public class GroupJoinRequestRepository {
         UUID.fromString(studentId));
   }
 
-  public Optional<GroupJoinRequest> findPendingByGroupAndStudent(
-      String groupId, String studentId) {
+  public Optional<GroupJoinRequest> findPendingByGroupAndStudent(String groupId, String studentId) {
     List<GroupJoinRequest> requests =
         jdbc.query(
             """
