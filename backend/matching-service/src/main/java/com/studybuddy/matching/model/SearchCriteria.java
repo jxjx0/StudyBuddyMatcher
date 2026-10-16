@@ -1,28 +1,28 @@
 package com.studybuddy.matching.model;
 
-/**
- * What a student is searching for.
- *
- * The UML holds a Course object here. Across a service boundary that is not
- * possible, and this arrives as JSON from the browser, so it carries the
- * course code instead.
- */
+import java.util.HashMap;
+import java.util.Map;
+
+import com.studybuddy.matching.dto.CourseDto;
+
 public class SearchCriteria {
 
-	private String courseCode;
+	public static final String FILTER_MEETING_MODE = "meetingMode";
+	public static final String FILTER_MIN_OVERLAP_MINUTES = "minOverlapMinutes";
+
+	private CourseDto course;
 	private StudyGoal studyGoal;
-	private MeetingMode meetingMode;
-	private int minOverlapMinutes;
+	private Map<String, Object> filters = new HashMap<>();
 
 	public SearchCriteria() {
 	}
 
-	public String getCourseCode() {
-		return courseCode;
+	public CourseDto getCourse() {
+		return course;
 	}
 
-	public void setCourseCode(String courseCode) {
-		this.courseCode = courseCode;
+	public void setCourse(CourseDto course) {
+		this.course = course;
 	}
 
 	public StudyGoal getStudyGoal() {
@@ -33,19 +33,11 @@ public class SearchCriteria {
 		this.studyGoal = studyGoal;
 	}
 
-	public MeetingMode getMeetingMode() {
-		return meetingMode;
+	public Map<String, Object> getFilters() {
+		return filters;
 	}
 
-	public void setMeetingMode(MeetingMode meetingMode) {
-		this.meetingMode = meetingMode;
-	}
-
-	public int getMinOverlapMinutes() {
-		return minOverlapMinutes;
-	}
-
-	public void setMinOverlapMinutes(int minOverlapMinutes) {
-		this.minOverlapMinutes = minOverlapMinutes;
+	public void setFilters(Map<String, Object> filters) {
+		this.filters = filters == null ? new HashMap<>() : new HashMap<>(filters);
 	}
 }

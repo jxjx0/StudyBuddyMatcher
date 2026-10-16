@@ -1,12 +1,19 @@
 package com.studybuddy.matching.engine;
 
-import com.studybuddy.matching.model.MatchingCriterion;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import com.studybuddy.matching.model.CriterionType;
+import com.studybuddy.matching.model.MatchingCriterion;
 
 /**
  * Gives course alignment the largest share of the weighting.
+ *
+ * The administrator chooses the weights; this strategy only enforces its rule
+ * that COURSE must carry the highest weight. Weights that follow the rule are
+ * returned unchanged.
  */
 @Component
 public class CourseFirstMatchingStrategy implements MatchingStrategy {
@@ -18,7 +25,36 @@ public class CourseFirstMatchingStrategy implements MatchingStrategy {
 
 	@Override
 	public List<MatchingCriterion> applyStrategy(List<MatchingCriterion> criteria) {
-		// TODO: ensure COURSE carries the highest weight, then spread the rest
-		return criteria;
+		if (criteria == null || criteria.isEmpty()) {
+			return new ArrayList<>();
+		}
+
+		// Find the weight given to COURSE. It must be enabled for this strategy to make sense.
+		MatchingCriterion course = null;
+		for (MatchingCriterion criterion : criteria) {
+			if (criterion != null && criterion.isEnabled() && criterion.getType() == CriterionType.COURSE) {
+				course = criterion;
+			}
+		}
+		if (course == null) {
+			throw new IllegalArgumentException("Course-first matching requires the course criterion to be enabled");
+		}
+
+		// Every other enabled criterion must weigh strictly less than COURSE.
+		for (MatchingCriterion criterion : criteria) {
+			if (criterion != null && criterion != course && criterion.isEnabled()
+					&& criterion.getWeight() >= course.getWeight()) {
+				throw new IllegalArgumentException("Course-first matching requires course to have the highest weight");
+			}
+		}
+
+		// Return copies so the stored configuration can never be changed through this list.
+		List<MatchingCriterion> weighted = new ArrayList<>();
+		for (MatchingCriterion criterion : criteria) {
+			if (criterion != null) {
+				weighted.add(new MatchingCriterion(criterion.getType(), criterion.getWeight(), criterion.isEnabled()));
+			}
+		}
+		return weighted;
 	}
 }

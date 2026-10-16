@@ -148,7 +148,8 @@ const slotLabel = (slot) => ({
   time: `${to12h(slot.startTime)} – ${to12h(slot.endTime)}`,
 });
 function mapStudent(student) {
-  const course = student.coursesForStudying?.[0] || student.currentCourses?.[0];
+  // Only the courses the student wants a study buddy for, matching the matching-service filter.
+  const buddyCourses = student.coursesForStudying || [];
   const goals = (student.studyGoals || []).map(goalLabel);
   return {
     id: student.userId,
@@ -157,11 +158,8 @@ function mapStudent(student) {
     color: "coral",
     school: student.school,
     programme: `${student.programme || student.school}, Year ${student.yearOfStudy}`,
-    course: course ? displayCourse(course) : "",
-    courseCodes: [
-      ...(student.coursesForStudying || []),
-      ...(student.currentCourses || []),
-    ].map((item) => item.courseCode.toLowerCase()),
+    course: buddyCourses.map(displayCourse).join(", "),
+    courseCodes: buddyCourses.map((item) => item.courseCode.toLowerCase()),
     slots: student.weeklyAvailability || [],
     availability:
       (student.weeklyAvailability || [])
@@ -525,6 +523,7 @@ export function useAppState() {
     deleteAccount,
     nav,
     filteredStudents,
+    mapStudent,
     matchingSlots,
     go,
     signIn,

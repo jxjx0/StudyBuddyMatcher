@@ -4,6 +4,8 @@ import com.studybuddy.matching.model.MatchingConfig;
 import com.studybuddy.matching.model.MatchingCriterion;
 import com.studybuddy.matching.model.CriterionType;
 import com.studybuddy.matching.engine.MatchingStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class MatchingConfigurationService implements CommandLineRunner {
+
+	private static final Logger log = LoggerFactory.getLogger(MatchingConfigurationService.class);
 
 	private final Map<String, MatchingStrategy> strategiesByName;
 	private final JdbcTemplate jdbc;
@@ -49,6 +53,17 @@ public class MatchingConfigurationService implements CommandLineRunner {
 				(rs, row) -> new MatchingCriterion(CriterionType.valueOf(rs.getString("criterion_type")),
 						rs.getDouble("weight"), rs.getBoolean("enabled")));
 		if (!savedCriteria.isEmpty()) currentConfig.setCriteria(savedCriteria);
+		// Weights saved before strategies enforced their rules may not follow them. Searches still work
+		// (MatchingEngine falls back to these weights), but the administrator should save them again.
+		MatchingStrategy strategy = currentConfig.getStrategy();
+		if (strategy != null) {
+			try {
+				strategy.applyStrategy(currentConfig.getCriteria());
+			} catch (IllegalArgumentException e) {
+				log.warn("Saved matching weights do not follow the {} rule: {}. Re-save them on the admin Matching page.",
+						strategy.getName(), e.getMessage());
+			}
+		}
 	}
 
 	public MatchingConfig getCurrentConfig() {
@@ -85,11 +100,15 @@ public class MatchingConfigurationService implements CommandLineRunner {
 		}
 		if (criteria.stream().noneMatch(MatchingCriterion::isEnabled) || Math.abs(enabledWeight - 100) > 0.01)
 			throw new IllegalArgumentException("Enabled criterion weights must total 100");
+		// The selected strategy checks its rule here, so weights that break it are rejected before
+		// anything is saved. Balanced replaces the weights with equal shares, and those are what get stored.
+		MatchingStrategy strategy = currentConfig.getStrategy();
+		List<MatchingCriterion> finalCriteria = strategy == null ? criteria : strategy.applyStrategy(criteria);
 		jdbc.update("DELETE FROM matching_criteria");
-		for (MatchingCriterion criterion : criteria) jdbc.update(
+		for (MatchingCriterion criterion : finalCriteria) jdbc.update(
 				"INSERT INTO matching_criteria(criterion_type, weight, enabled) VALUES (?, ?, ?)",
 				criterion.getType().name(), criterion.getWeight(), criterion.isEnabled());
-		currentConfig.setCriteria(List.copyOf(criteria));
+		currentConfig.setCriteria(List.copyOf(finalCriteria));
 	}
 
 	private MatchingStrategy requireStrategy(String name) {

@@ -525,6 +525,7 @@ legend {
   min-width: 0;
   width: 100%;
   min-height: 44px;
+  padding: 0;
   color: #302d33;
   outline: none;
 }
@@ -571,6 +572,10 @@ legend {
 .tag-success {
   color: #346247;
   background: #e5eee3;
+}
+.student-info .match-score {
+  color: var(--accent);
+  font-weight: 700;
 }
 .chip-list {
   display: flex;
@@ -1024,6 +1029,11 @@ dd {
 .weight-row small {
   display: block;
   margin-top: 4px;
+}
+.criterion-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .weight-row > input {
   width: 100%;

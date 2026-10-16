@@ -247,12 +247,14 @@ function viewGroup(groupId) {
       </div>
       <div class="filter-surface">
         <div class="group-search">
-          <label class="search-box"
-            ><Search :size="20" /><input
-              v-model="searchQuery"
-              type="search"
-              aria-label="Search group name"
-              placeholder="Search groups by name" /></label
+          <label class="field"
+            ><span>Search</span
+            ><span class="search-box"
+              ><Search :size="20" /><input
+                v-model="searchQuery"
+                type="search"
+                aria-label="Search group name"
+                placeholder="Search groups by name" /></span></label
           ><label class="field"
             ><span>Course</span
             ><select v-model="selectedCourse">

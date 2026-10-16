@@ -4,13 +4,8 @@ import com.studybuddy.matching.dto.StudentDto;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
-/**
- * One candidate in a ranked list of matches, with the score that put it there.
- *
- * The candidate is a StudentDto rather than a Student - matching-service does
- * not own the Student class, it receives student data from user-service.
- */
 public class MatchResult {
 
 	private StudentDto candidate;
@@ -20,10 +15,10 @@ public class MatchResult {
 	public MatchResult() {
 	}
 
-	public MatchResult(StudentDto candidate, double score, List<CriterionType> matchedCriteria) {
+	public MatchResult(StudentDto candidate, double score, List<String> matchedCriteria) {
 		this.candidate = candidate;
 		this.score = score;
-		this.matchedCriteria = matchedCriteria;
+		setMatchedCriteria(matchedCriteria);
 	}
 
 	public StudentDto getCandidate() {
@@ -42,11 +37,22 @@ public class MatchResult {
 		this.score = score;
 	}
 
-	public List<CriterionType> getMatchedCriteria() {
-		return matchedCriteria;
+	public List<String> getMatchedCriteria() {
+		List<String> names = new ArrayList<>();
+		for (CriterionType type : matchedCriteria) {
+			names.add(type.name());
+		}
+		return names;
 	}
 
-	public void setMatchedCriteria(List<CriterionType> matchedCriteria) {
-		this.matchedCriteria = matchedCriteria;
+	public void setMatchedCriteria(List<String> matchedCriteria) {
+		this.matchedCriteria = new ArrayList<>();
+		if (matchedCriteria != null) {
+			for (String name : matchedCriteria) {
+				if (name != null && !name.isBlank()) {
+					this.matchedCriteria.add(CriterionType.valueOf(name.trim().toUpperCase(Locale.ROOT)));
+				}
+			}
+		}
 	}
 }
