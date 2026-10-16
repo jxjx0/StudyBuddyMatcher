@@ -59,20 +59,6 @@ public class GroupJoinRequestRepository {
         UUID.fromString(studentId));
   }
 
-  public Optional<GroupJoinRequest> findPendingByGroupAndStudent(
-      String groupId, String studentId) {
-    List<GroupJoinRequest> requests =
-        jdbc.query(
-            """
-                SELECT * FROM group_join_requests
-                WHERE group_id=? AND student_id=? AND status='PENDING'
-                """,
-            this::mapRequest,
-            UUID.fromString(groupId),
-            UUID.fromString(studentId));
-    return requests.stream().findFirst();
-  }
-
   private GroupJoinRequest mapRequest(ResultSet resultSet, int rowNumber) throws SQLException {
     Timestamp respondedAt = resultSet.getTimestamp("responded_at");
     return GroupJoinRequest.restore(

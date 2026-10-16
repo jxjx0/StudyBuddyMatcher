@@ -277,7 +277,6 @@ nav .nav-item {
 }
 .primary-button,
 .secondary-button,
-.cancel-button,
 .danger-button,
 .text-button,
 .icon-button {
@@ -310,16 +309,6 @@ nav .nav-item {
 .secondary-button:hover:not(:disabled) {
   background: #f4eee7;
   color: #433b36;
-}
-.cancel-button {
-  background: #f9e8e4;
-  border-color: #e8b9af;
-  color: #8f3029;
-}
-.cancel-button:hover:not(:disabled) {
-  background: #f2d5ce;
-  border-color: #d99b8e;
-  color: #762720;
 }
 .text-button {
   background: transparent;

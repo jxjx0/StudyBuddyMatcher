@@ -82,12 +82,6 @@ public class StudyGroupController {
     return groupService.requestToJoin(groupId.toString(), currentStudentId(jwt));
   }
 
-  @DeleteMapping("/{id}/join-requests")
-  public GroupJoinRequest cancelJoinRequest(
-      @PathVariable("id") UUID groupId, @AuthenticationPrincipal Jwt jwt) {
-    return groupService.cancelJoinRequest(groupId.toString(), currentStudentId(jwt));
-  }
-
   @GetMapping("/{id}/join-requests")
   public List<JoinRequestView> findGroupRequests(
       @PathVariable("id") UUID groupId, @AuthenticationPrincipal Jwt jwt) {

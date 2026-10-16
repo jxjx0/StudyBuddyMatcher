@@ -60,10 +60,6 @@ public class GroupJoinRequest {
     recordDecision(GroupJoinRequestStatus.REJECTED);
   }
 
-  public void cancel() {
-    recordDecision(GroupJoinRequestStatus.CANCELLED);
-  }
-
   private void recordDecision(GroupJoinRequestStatus decision) {
     if (!isPending()) {
       throw new IllegalStateException("This request has already been decided");
