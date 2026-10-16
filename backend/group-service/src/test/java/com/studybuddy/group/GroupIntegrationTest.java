@@ -551,8 +551,7 @@ class GroupIntegrationTest {
   void onlyTheRequesterCanCancelAPendingRequestThroughTheApi() throws Exception {
     String id = create(3);
     var request = service.requestToJoin(id, B);
-    String otherStudentToken =
-        token(C, SECRET, "studybuddy-user-service", 3600, "ROLE_STUDENT");
+    String otherStudentToken = token(C, SECRET, "studybuddy-user-service", 3600, "ROLE_STUDENT");
     var unauthorizedDelete =
         HttpRequest.newBuilder(
                 URI.create("http://127.0.0.1:" + port + "/api/groups/" + id + "/join-requests"))
@@ -563,8 +562,7 @@ class GroupIntegrationTest {
         404, http.send(unauthorizedDelete, HttpResponse.BodyHandlers.ofString()).statusCode());
     assertTrue(requests.findById(request.getGroupJoinRequestId()).orElseThrow().isPending());
 
-    String requesterToken =
-        token(B, SECRET, "studybuddy-user-service", 3600, "ROLE_STUDENT");
+    String requesterToken = token(B, SECRET, "studybuddy-user-service", 3600, "ROLE_STUDENT");
     var delete =
         HttpRequest.newBuilder(
                 URI.create("http://127.0.0.1:" + port + "/api/groups/" + id + "/join-requests"))
