@@ -525,6 +525,7 @@ legend {
   min-width: 0;
   width: 100%;
   min-height: 44px;
+  padding: 0;
   color: #302d33;
   outline: none;
 }

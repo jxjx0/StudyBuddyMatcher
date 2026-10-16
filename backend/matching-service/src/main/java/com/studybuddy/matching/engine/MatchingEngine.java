@@ -1,6 +1,5 @@
 package com.studybuddy.matching.engine;
 
-import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -120,10 +119,8 @@ public class MatchingEngine {
 		if (minutes <= 0) {
 			return 0;
 		}
-		// The share of the searcher's (a's) free time that the candidate can also make, like
-		// scoreCourseMatch counts the searcher's courses. Scores can differ by who searches.
-		int searcherFreeMinutes = totalFreeMinutes(a);
-		return Math.min(1.0, (double) minutes / searcherFreeMinutes);
+		int totalFreeMinutes = Math.max(totalFreeMinutes(a), totalFreeMinutes(b));
+		return totalFreeMinutes <= 0 ? 0 : (double) minutes / totalFreeMinutes;
 	}
 
 	public double scoreStudyModeCompat(StudentDto a, StudentDto b) {
@@ -311,10 +308,10 @@ public class MatchingEngine {
 	}
 
 	private int totalFreeMinutes(StudentDto student) {
-		// Merged first, so a student's own overlapping slots cannot count the same time twice.
+		// Merge first so a student's overlapping availability is not counted twice.
 		int total = 0;
 		for (TimeSlot slot : mergeSlots(student.getWeeklyAvailability())) {
-			total += (int) Duration.between(slot.getStartTime(), slot.getEndTime()).toMinutes();
+			total += java.time.Duration.between(slot.getStartTime(), slot.getEndTime()).toMinutes();
 		}
 		return total;
 	}
