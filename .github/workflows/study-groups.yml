@@ -107,5 +107,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run format:groups:check
+      - name: Test group-card join and cancel actions
+        run: >-
+          npm run test:ui --
+          --testNamePattern="eligible group cards can request to join and immediately show pending status|students can cancel a pending request from a group card and reapply"
       - run: npm test
       - run: npm run build

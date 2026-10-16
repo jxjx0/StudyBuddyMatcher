@@ -124,13 +124,12 @@ async function fakeApi(path, options = {}) {
     return structuredClone(ownRequests);
   if (path === "/api/courses")
     return [{ courseCode: "IS442", courseName: "Object Oriented Programming" }];
-  if (path === "/api/groups/group-1/details") {
+  if (path === "/api/groups/group-1") {
     if (failDetail) throw new Error("Details unavailable");
-    return {
-      group: structuredClone(group),
-      requests: group.isLeader ? structuredClone(joinRequests) : [],
-    };
+    return structuredClone(group);
   }
+  if (path === "/api/groups/group-1/join-requests")
+    return structuredClone(joinRequests);
   throw new Error(`Unexpected test route: ${path}`);
 }
 
@@ -442,15 +441,13 @@ test("successful join does not reload the group details", async () => {
   await mountPage();
   await openGroup();
   const detailsReads = api.mock.calls.filter(([path]) =>
-    path === "/api/groups/group-1/details",
+    path === "/api/groups/group-1",
   ).length;
   await click("Request to join", topDialog());
   expect(topDialog().textContent).toContain("Join request sent");
   expect(topDialog().textContent).toContain("Request pending");
   expect(
-    api.mock.calls.filter(
-      ([path]) => path === "/api/groups/group-1/details",
-    ),
+    api.mock.calls.filter(([path]) => path === "/api/groups/group-1"),
   ).toHaveLength(detailsReads);
   expect(writes()).toHaveLength(1);
 });
