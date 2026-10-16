@@ -71,6 +71,14 @@ async function fakeApi(path, options = {}) {
     } else if (path.endsWith("/join-requests")) {
       group.myRequestStatus = "PENDING";
       group.canRequest = false;
+      return {
+        groupJoinRequestId: "request-new",
+        studentId: "student-1",
+        groupId: group.groupId,
+        status: "PENDING",
+        createdAt: "2026-10-17T00:00:00Z",
+        respondedAt: null,
+      };
     } else if (options.body) {
       Object.assign(group, JSON.parse(options.body));
     }
@@ -95,11 +103,12 @@ async function fakeApi(path, options = {}) {
     return structuredClone(ownRequests);
   if (path === "/api/courses")
     return [{ courseCode: "IS442", courseName: "Object Oriented Programming" }];
-  if (path === "/api/groups/group-1/join-requests")
-    return structuredClone(joinRequests);
-  if (path === "/api/groups/group-1") {
+  if (path === "/api/groups/group-1/details") {
     if (failDetail) throw new Error("Details unavailable");
-    return structuredClone(group);
+    return {
+      group: structuredClone(group),
+      requests: group.isLeader ? structuredClone(joinRequests) : [],
+    };
   }
   throw new Error(`Unexpected test route: ${path}`);
 }
@@ -405,17 +414,66 @@ test("successful end followed by refresh failure stays completed and offers a re
   expect(writes()).toHaveLength(1);
 });
 
-test("successful join followed by detail failure removes the stale Request button", async () => {
+test("successful join does not reload the group details", async () => {
   group.isLeader = false;
   group.isMember = false;
   group.canRequest = true;
   await mountPage();
   await openGroup();
-  failDetail = true;
+  const detailsReads = api.mock.calls.filter(([path]) =>
+    path === "/api/groups/group-1/details",
+  ).length;
   await click("Request to join", topDialog());
-  expect(topDialog()).toBeUndefined();
-  expect(document.body.textContent).toContain("Your change was saved");
+  expect(topDialog().textContent).toContain("Join request sent");
+  expect(topDialog().textContent).toContain("Request pending");
+  expect(
+    api.mock.calls.filter(
+      ([path]) => path === "/api/groups/group-1/details",
+    ),
+  ).toHaveLength(detailsReads);
   expect(writes()).toHaveLength(1);
+});
+
+test("eligible group cards can request to join and immediately show pending status", async () => {
+  group.isLeader = false;
+  group.isMember = false;
+  group.canRequest = true;
+  await mountPage();
+
+  expect(button("Request to join Java study circle")).toBeDefined();
+  await click("Request to join Java study circle");
+
+  expect(button("View Java study circle")).toBeDefined();
+  expect(button("Request to join Java study circle")).toBeUndefined();
+  expect(document.body.textContent).toContain("Request pending");
+  expect(document.body.textContent).toContain("Join request sent");
+  expect(writes()).toHaveLength(1);
+  expect(
+    api.mock.calls.filter(([path]) => path === "/api/groups/overview"),
+  ).toHaveLength(1);
+});
+
+test("creating a group does not show Sending on another group's join button", async () => {
+  group.isLeader = false;
+  group.isMember = false;
+  group.canRequest = true;
+  let finishWrite;
+  pendingWrite = new Promise((resolve) => {
+    finishWrite = resolve;
+  });
+  await mountPage();
+  await click("Create group");
+  await fill('input[maxlength="100"]', "New study circle");
+
+  button("Save group", topDialog()).click();
+  await settle();
+
+  expect(button("Request to join Java study circle").textContent.trim()).toBe(
+    "Request to join",
+  );
+  expect(button("Request to join Java study circle").disabled).toBe(true);
+  finishWrite();
+  await settle();
 });
 
 test("a sent request displays feedback inside the dialog and prevents another request", async () => {

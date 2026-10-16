@@ -48,6 +48,7 @@ const requestEmptyTitle = computed(() => {
   return "No past decisions yet";
 });
 const tab = ref("browse");
+const sendingRequestGroupId = ref(null);
 const searchQuery = ref("");
 const selectedCourse = ref("");
 const selectedGoal = ref("");
@@ -173,6 +174,17 @@ async function handleGroupAction({ path, message, method, endGroup }) {
     tab.value = "mine";
     groupStatus.value = "CLOSED";
     resetFilters();
+  }
+}
+async function requestToJoinGroup(groupId) {
+  sendingRequestGroupId.value = groupId;
+  try {
+    await handleGroupAction({
+      path: `/api/groups/${groupId}/join-requests`,
+      message: "Join request sent",
+    });
+  } finally {
+    sendingRequestGroupId.value = null;
   }
 }
 function viewGroup(groupId) {
@@ -348,6 +360,19 @@ function viewGroup(groupId) {
             {{ group.studyGoals.map(labelOf).join(", ") }}
           </p>
           <footer>
+            <button
+              v-if="group.canRequest"
+              class="primary-button"
+              :disabled="busy"
+              :aria-label="`Request to join ${group.groupName}`"
+              @click="requestToJoinGroup(group.groupId)"
+            >
+              {{
+                sendingRequestGroupId === group.groupId
+                  ? "Sending…"
+                  : "Request to join"
+              }}
+            </button>
             <button
               class="secondary-button"
               :disabled="busy"

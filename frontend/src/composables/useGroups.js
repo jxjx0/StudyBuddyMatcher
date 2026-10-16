@@ -143,9 +143,50 @@ export function useGroups() {
     try {
       const requestOptions = { method };
       if (body) requestOptions.body = JSON.stringify(body);
-      await api(path, requestOptions);
+      const result = await api(path, requestOptions);
       if (token.value === sessionToken) cachedOverview = null;
       if (!isCurrentSession(sessionToken)) return false;
+      const joinRequestPath = path.match(/^\/api\/groups\/([^/]+)\/join-requests$/);
+      if (
+        method === "POST" &&
+        joinRequestPath &&
+        result?.status === "PENDING" &&
+        result.groupJoinRequestId &&
+        result.groupId === joinRequestPath[1]
+      ) {
+        const updateRequestState = (group) =>
+          group.groupId === result.groupId
+            ? { ...group, myRequestStatus: "PENDING", canRequest: false }
+            : group;
+        groups.value = groups.value.map(updateRequestState);
+        mine.value = mine.value.map(updateRequestState);
+        if (selected.value?.groupId === result.groupId) {
+          selected.value = updateRequestState(selected.value);
+        }
+        if (
+          !requests.value.some(
+            (request) =>
+              request.groupJoinRequestId === result.groupJoinRequestId,
+          )
+        ) {
+          const updatedGroup = groups.value.find(
+            (group) => group.groupId === result.groupId,
+          ) || selected.value;
+          requests.value = [
+            {
+              groupJoinRequestId: result.groupJoinRequestId,
+              studentId: result.studentId,
+              groupId: result.groupId,
+              groupName: updatedGroup?.groupName || "",
+              status: result.status,
+              createdAt: result.createdAt,
+              respondedAt: result.respondedAt,
+            },
+            ...requests.value,
+          ];
+        }
+        return true;
+      }
       if (dismissDetail) closeDetail();
       let refreshSucceeded = await load();
       if (!isCurrentSession(sessionToken)) return false;
