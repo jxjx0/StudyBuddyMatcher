@@ -441,16 +441,14 @@ test("successful join does not reload the group details", async () => {
   group.canRequest = true;
   await mountPage();
   await openGroup();
-  const detailsReads = api.mock.calls.filter(([path]) =>
-    path === "/api/groups/group-1/details",
+  const detailsReads = api.mock.calls.filter(
+    ([path]) => path === "/api/groups/group-1/details",
   ).length;
   await click("Request to join", topDialog());
   expect(topDialog().textContent).toContain("Join request sent");
   expect(topDialog().textContent).toContain("Request pending");
   expect(
-    api.mock.calls.filter(
-      ([path]) => path === "/api/groups/group-1/details",
-    ),
+    api.mock.calls.filter(([path]) => path === "/api/groups/group-1/details"),
   ).toHaveLength(detailsReads);
   expect(writes()).toHaveLength(1);
 });
@@ -494,8 +492,9 @@ test("students can cancel a pending request from a group card and reapply", asyn
   expect(document.body.textContent).toContain("Join request cancelled");
   expect(writes()).toHaveLength(1);
   expect(writes()[0][1].method).toBe("DELETE");
-  expect(api.mock.calls.filter(([path]) => path === "/api/groups/overview"))
-    .toHaveLength(1);
+  expect(
+    api.mock.calls.filter(([path]) => path === "/api/groups/overview"),
+  ).toHaveLength(1);
 });
 
 test("students can cancel a pending request from the detail dialog", async () => {
