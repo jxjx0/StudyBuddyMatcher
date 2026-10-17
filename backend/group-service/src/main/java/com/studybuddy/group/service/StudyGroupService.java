@@ -211,6 +211,30 @@ public class StudyGroupService {
         });
   }
 
+  public GroupJoinRequest cancelJoinRequest(String groupId, String currentStudentId) {
+    return transaction.execute(
+        transactionStatus -> {
+          requireGroup(groupId, true);
+          GroupJoinRequest pendingRequest =
+              requestRepository
+                  .findPendingByGroupAndStudent(groupId, currentStudentId)
+                  .map(request -> requireRequest(request.getGroupJoinRequestId(), true))
+                  .orElseThrow(
+                      () ->
+                          new GroupException(
+                              HttpStatus.NOT_FOUND, "Pending join request not found"));
+          if (!pendingRequest.getStudentId().equals(currentStudentId)) {
+            throw new GroupException(
+                HttpStatus.FORBIDDEN, "You can only cancel your own join request");
+          }
+          if (!pendingRequest.isPending()) {
+            throw new IllegalStateException("This join request is no longer pending");
+          }
+          pendingRequest.cancel();
+          return requestRepository.save(pendingRequest);
+        });
+  }
+
   public GroupJoinRequest decide(String requestId, String currentStudentId, boolean accept) {
     requireActiveStudent(studentClient.findStudent(currentStudentId));
     GroupJoinRequest requestBeforeLock = requireRequest(requestId, false);
