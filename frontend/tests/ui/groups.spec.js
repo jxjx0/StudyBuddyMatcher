@@ -124,13 +124,12 @@ async function fakeApi(path, options = {}) {
     return structuredClone(ownRequests);
   if (path === "/api/courses")
     return [{ courseCode: "IS442", courseName: "Object Oriented Programming" }];
-  if (path === "/api/groups/group-1/details") {
+  if (path === "/api/groups/group-1") {
     if (failDetail) throw new Error("Details unavailable");
-    return {
-      group: structuredClone(group),
-      requests: group.isLeader ? structuredClone(joinRequests) : [],
-    };
+    return structuredClone(group);
   }
+  if (path === "/api/groups/group-1/join-requests")
+    return structuredClone(joinRequests);
   throw new Error(`Unexpected test route: ${path}`);
 }
 
@@ -442,13 +441,13 @@ test("successful join does not reload the group details", async () => {
   await mountPage();
   await openGroup();
   const detailsReads = api.mock.calls.filter(
-    ([path]) => path === "/api/groups/group-1/details",
+    ([path]) => path === "/api/groups/group-1",
   ).length;
   await click("Request to join", topDialog());
   expect(topDialog().textContent).toContain("Join request sent");
-  expect(topDialog().textContent).toContain("Request pending");
+  expect(button("Cancel request", topDialog())).toBeDefined();
   expect(
-    api.mock.calls.filter(([path]) => path === "/api/groups/group-1/details"),
+    api.mock.calls.filter(([path]) => path === "/api/groups/group-1"),
   ).toHaveLength(detailsReads);
   expect(writes()).toHaveLength(1);
 });
@@ -463,7 +462,9 @@ test("eligible group cards can request to join and immediately show pending stat
   await click("Request to join Java study circle");
 
   expect(button("View Java study circle")).toBeDefined();
-  expect(button("Request to join Java study circle")).toBeUndefined();
+  expect(
+    document.querySelector('[aria-label="Request to join Java study circle"]'),
+  ).toBeNull();
   expect(document.body.textContent).toContain("Request pending");
   expect(document.body.textContent).toContain("Join request sent");
   expect(writes()).toHaveLength(1);
@@ -544,7 +545,7 @@ test("a sent request displays feedback inside the dialog and prevents another re
   expect(topDialog().querySelector('[role="status"]').textContent).toBe(
     "Join request sent",
   );
-  expect(topDialog().textContent).toContain("Request pending");
+  expect(button("Cancel request", topDialog())).toBeDefined();
   expect(topDialog().textContent).not.toContain("Request to join");
 });
 
