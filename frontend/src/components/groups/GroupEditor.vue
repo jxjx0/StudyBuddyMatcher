@@ -264,7 +264,7 @@ function save() {
   >
     <p>Unsaved changes will be lost.</p>
     <div class="dialog-footer">
-      <button class="secondary-button" autofocus @click="keepEditing">
+      <button class="secondary-button" @click="keepEditing">
         Keep editing
       </button>
       <button class="danger-button" @click="discard">Discard changes</button>
