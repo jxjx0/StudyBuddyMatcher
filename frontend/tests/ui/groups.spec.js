@@ -60,28 +60,7 @@ async function fakeApi(path, options = {}) {
     if (pendingWrite) await pendingWrite;
     if (failWrite)
       throw new Error("The group could not be updated. Please try again.");
-    if (options.method === "DELETE" && path.endsWith("/join-requests")) {
-      group.myRequestStatus = "CANCELLED";
-      group.canRequest =
-        group.status === "ACTIVE" &&
-        group.leaderAvailable &&
-        group.memberCount < group.maxGroupSize &&
-        !group.isMember;
-      const respondedAt = "2026-10-17T01:00:00Z";
-      ownRequests = ownRequests.map((request) =>
-        request.groupId === group.groupId && request.status === "PENDING"
-          ? { ...request, status: "CANCELLED", respondedAt }
-          : request,
-      );
-      return {
-        groupJoinRequestId: "request-pending",
-        studentId: "student-1",
-        groupId: group.groupId,
-        status: "CANCELLED",
-        createdAt: "2026-10-17T00:00:00Z",
-        respondedAt,
-      };
-    } else if (path.endsWith("/close")) {
+    if (path.endsWith("/close")) {
       group.status = "CLOSED";
       for (const request of joinRequests) request.status = "REJECTED";
     } else if (path.endsWith("/members/bob")) {
@@ -124,12 +103,13 @@ async function fakeApi(path, options = {}) {
     return structuredClone(ownRequests);
   if (path === "/api/courses")
     return [{ courseCode: "IS442", courseName: "Object Oriented Programming" }];
-  if (path === "/api/groups/group-1") {
+  if (path === "/api/groups/group-1/details") {
     if (failDetail) throw new Error("Details unavailable");
-    return structuredClone(group);
+    return {
+      group: structuredClone(group),
+      requests: group.isLeader ? structuredClone(joinRequests) : [],
+    };
   }
-  if (path === "/api/groups/group-1/join-requests")
-    return structuredClone(joinRequests);
   throw new Error(`Unexpected test route: ${path}`);
 }
 
@@ -440,14 +420,16 @@ test("successful join does not reload the group details", async () => {
   group.canRequest = true;
   await mountPage();
   await openGroup();
-  const detailsReads = api.mock.calls.filter(
-    ([path]) => path === "/api/groups/group-1",
+  const detailsReads = api.mock.calls.filter(([path]) =>
+    path === "/api/groups/group-1/details",
   ).length;
   await click("Request to join", topDialog());
   expect(topDialog().textContent).toContain("Join request sent");
-  expect(button("Cancel request", topDialog())).toBeDefined();
+  expect(topDialog().textContent).toContain("Request pending");
   expect(
-    api.mock.calls.filter(([path]) => path === "/api/groups/group-1"),
+    api.mock.calls.filter(
+      ([path]) => path === "/api/groups/group-1/details",
+    ),
   ).toHaveLength(detailsReads);
   expect(writes()).toHaveLength(1);
 });
@@ -462,54 +444,13 @@ test("eligible group cards can request to join and immediately show pending stat
   await click("Request to join Java study circle");
 
   expect(button("View Java study circle")).toBeDefined();
-  expect(
-    document.querySelector('[aria-label="Request to join Java study circle"]'),
-  ).toBeNull();
+  expect(button("Request to join Java study circle")).toBeUndefined();
   expect(document.body.textContent).toContain("Request pending");
   expect(document.body.textContent).toContain("Join request sent");
   expect(writes()).toHaveLength(1);
   expect(
     api.mock.calls.filter(([path]) => path === "/api/groups/overview"),
   ).toHaveLength(1);
-});
-
-test("students can cancel a pending request from a group card and reapply", async () => {
-  group.isLeader = false;
-  group.isMember = false;
-  group.myRequestStatus = "PENDING";
-  group.canRequest = false;
-  ownRequests = [
-    {
-      groupJoinRequestId: "request-pending",
-      groupId: group.groupId,
-      status: "PENDING",
-    },
-  ];
-  await mountPage();
-
-  await click(`Cancel request to ${group.groupName}`);
-
-  expect(button(`Request to join ${group.groupName}`)).toBeDefined();
-  expect(document.body.textContent).toContain("Join request cancelled");
-  expect(writes()).toHaveLength(1);
-  expect(writes()[0][1].method).toBe("DELETE");
-  expect(
-    api.mock.calls.filter(([path]) => path === "/api/groups/overview"),
-  ).toHaveLength(1);
-});
-
-test("students can cancel a pending request from the detail dialog", async () => {
-  group.isLeader = false;
-  group.isMember = false;
-  group.myRequestStatus = "PENDING";
-  group.canRequest = false;
-  await mountPage();
-  await openGroup();
-
-  await click("Cancel request", topDialog());
-
-  expect(button("Request to join", topDialog())).toBeDefined();
-  expect(topDialog().textContent).toContain("Join request cancelled");
 });
 
 test("creating a group does not show Sending on another group's join button", async () => {
@@ -545,7 +486,7 @@ test("a sent request displays feedback inside the dialog and prevents another re
   expect(topDialog().querySelector('[role="status"]').textContent).toBe(
     "Join request sent",
   );
-  expect(button("Cancel request", topDialog())).toBeDefined();
+  expect(topDialog().textContent).toContain("Request pending");
   expect(topDialog().textContent).not.toContain("Request to join");
 });
 
@@ -744,32 +685,6 @@ test("My requests separates pending applications from dated past decisions", asy
     "Pending group",
   );
   expect(button("View Past group")).toBeDefined();
-});
-
-test("pending requests can be cancelled from My requests", async () => {
-  ownRequests = [
-    {
-      groupJoinRequestId: "pending",
-      groupId: group.groupId,
-      groupName: "Java study circle",
-      status: "PENDING",
-      createdAt: "2026-10-08T10:00:00Z",
-    },
-  ];
-  group.isLeader = false;
-  group.isMember = false;
-  group.myRequestStatus = "PENDING";
-  group.canRequest = false;
-  await mountPage();
-  await click("My requests");
-
-  await click("Cancel request to Java study circle");
-
-  expect(document.querySelectorAll("article")).toHaveLength(0);
-  expect(document.body.textContent).toContain("Join request cancelled");
-  await click("History (1)");
-  expect(document.querySelector("article").textContent).toContain("Cancelled");
-  expect(document.querySelector("article").textContent).toContain("Responded");
 });
 
 test("an empty Active view explains its state without offering a useless filter reset", async () => {

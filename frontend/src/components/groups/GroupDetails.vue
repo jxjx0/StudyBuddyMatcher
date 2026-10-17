@@ -50,13 +50,6 @@ function requestToJoin() {
     "Join request sent",
   );
 }
-function cancelRequest() {
-  sendAction(
-    `/api/groups/${props.group.groupId}/join-requests`,
-    "Join request cancelled",
-    "DELETE",
-  );
-}
 function decide(request, decision) {
   const message =
     decision === "accept" ? "Request accepted" : "Request rejected";
@@ -146,14 +139,6 @@ function confirm() {
         @click="requestToJoin"
       >
         {{ busy ? "Sending…" : "Request to join" }}
-      </button>
-      <button
-        v-else-if="group.myRequestStatus === 'PENDING'"
-        class="cancel-button"
-        :disabled="busy"
-        @click="cancelRequest"
-      >
-        {{ busy ? "Cancelling…" : "Cancel request" }}
       </button>
       <p
         v-else-if="!group.isMember && group.status !== 'CLOSED'"
@@ -286,6 +271,7 @@ function confirm() {
         <button
           class="secondary-button"
           :disabled="busy"
+          autofocus
           @click="confirmation = null"
         >
           {{ confirmation.endGroup ? "Keep group active" : "Keep member" }}

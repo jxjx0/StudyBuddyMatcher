@@ -374,21 +374,6 @@ function viewGroup(groupId) {
               }}
             </button>
             <button
-              v-else-if="group.myRequestStatus === 'PENDING'"
-              class="cancel-button"
-              :disabled="busy"
-              :aria-label="`Cancel request to ${group.groupName}`"
-              @click="
-                handleGroupAction({
-                  path: `/api/groups/${group.groupId}/join-requests`,
-                  method: 'DELETE',
-                  message: 'Join request cancelled',
-                })
-              "
-            >
-              Cancel request
-            </button>
-            <button
               class="secondary-button"
               :disabled="busy"
               :aria-label="`View ${group.groupName}`"
@@ -470,31 +455,14 @@ function viewGroup(groupId) {
             Responded {{ requestTime(request.respondedAt) }}
           </p>
         </div>
-        <div class="form-actions">
-          <button
-            v-if="request.status === 'PENDING'"
-            class="cancel-button"
-            :disabled="busy"
-            :aria-label="`Cancel request to ${request.groupName}`"
-            @click="
-              handleGroupAction({
-                path: `/api/groups/${request.groupId}/join-requests`,
-                method: 'DELETE',
-                message: 'Join request cancelled',
-              })
-            "
-          >
-            Cancel request
-          </button>
-          <button
-            class="secondary-button"
-            :disabled="busy"
-            :aria-label="`View ${request.groupName}`"
-            @click="viewGroup(request.groupId)"
-          >
-            View group
-          </button>
-        </div>
+        <button
+          class="secondary-button"
+          :disabled="busy"
+          :aria-label="`View ${request.groupName}`"
+          @click="viewGroup(request.groupId)"
+        >
+          View group
+        </button>
       </article>
     </template>
     <GroupDetails

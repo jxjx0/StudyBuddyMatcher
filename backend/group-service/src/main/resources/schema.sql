@@ -17,8 +17,7 @@ CREATE TABLE IF NOT EXISTS study_group_members (
 CREATE INDEX IF NOT EXISTS study_group_members_student ON study_group_members(student_id);
 CREATE TABLE IF NOT EXISTS group_join_requests (
  group_join_request_id uuid PRIMARY KEY, group_id uuid NOT NULL REFERENCES study_groups(group_id) ON DELETE CASCADE,
- student_id uuid NOT NULL, status varchar(16) NOT NULL,
- CONSTRAINT group_join_requests_status_check CHECK (status IN ('PENDING','ACCEPTED','REJECTED','CANCELLED')),
+ student_id uuid NOT NULL, status varchar(16) NOT NULL CHECK (status IN ('PENDING','ACCEPTED','REJECTED')),
  created_at timestamptz NOT NULL, responded_at timestamptz,
  CHECK ((status='PENDING' AND responded_at IS NULL) OR (status<>'PENDING' AND responded_at IS NOT NULL))
 );

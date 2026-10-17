@@ -189,43 +189,6 @@ export function useGroups() {
         }
         return true;
       }
-      const cancelRequestPath = path.match(
-        /^\/api\/groups\/([^/]+)\/join-requests$/,
-      );
-      if (
-        method === "DELETE" &&
-        cancelRequestPath &&
-        result?.status === "CANCELLED"
-      ) {
-        const targetGroupId = cancelRequestPath[1];
-        const updateRequestState = (group) =>
-          group.groupId === targetGroupId
-            ? {
-                ...group,
-                myRequestStatus: "CANCELLED",
-                canRequest:
-                  group.status === "ACTIVE" &&
-                  group.leaderAvailable &&
-                  group.memberCount < group.maxGroupSize &&
-                  !group.isMember,
-              }
-            : group;
-        groups.value = groups.value.map(updateRequestState);
-        mine.value = mine.value.map(updateRequestState);
-        if (selected.value?.groupId === targetGroupId) {
-          selected.value = updateRequestState(selected.value);
-        }
-        requests.value = requests.value.map((request) =>
-          request.groupId === targetGroupId && request.status === "PENDING"
-            ? {
-                ...request,
-                status: result.status,
-                respondedAt: result.respondedAt,
-              }
-            : request,
-        );
-        return true;
-      }
       if (dismissDetail) closeDetail();
       let refreshSucceeded = await load();
       if (!isCurrentSession(sessionToken)) return false;
