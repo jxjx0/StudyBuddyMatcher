@@ -124,7 +124,8 @@ public class MatchingEngine {
 	}
 
 	public double scoreStudyModeCompat(StudentDto a, StudentDto b) {
-		if (a == null || b == null) {
+		// A missing mode earns no marks; it still passes the meeting-mode filter.
+		if (a == null || b == null || a.getMeetingMode() == null || b.getMeetingMode() == null) {
 			return 0;
 		}
 		return modesCompatible(a.getMeetingMode(), b.getMeetingMode()) ? 1.0 : 0.0;
@@ -150,7 +151,8 @@ public class MatchingEngine {
 	}
 
 	public double scoreGroupSizeCompat(StudentDto a, StudentDto b) {
-		if (a == null || b == null) {
+		// A missing preference earns no marks.
+		if (a == null || b == null || a.getGroupSizePreference() == null || b.getGroupSizePreference() == null) {
 			return 0;
 		}
 		return groupSizesCompatible(a.getGroupSizePreference(), b.getGroupSizePreference()) ? 1.0 : 0.0;
