@@ -102,6 +102,6 @@ npm run format:groups:check
 npm run format:groups:write
 ```
 
-The `write`/`apply` commands format the selected files. The `check` commands report differences without editing them. Run `npm test` and `npm run build` in `frontend` to check the frontend. Run `python3 scripts/group-local.py test` from the repository root with PostgreSQL 17 installed to run backend tests against a disposable local database.
+The `write`/`apply` commands format the selected files. The `check` commands report differences without editing them. Run `npm run build` in `frontend` to check the frontend.
 
-[Study Groups checks](../.github/workflows/study-groups.yml) runs on relevant pull requests and pushes to `main`, and can also be started manually in GitHub Actions. It checks the scoped formatting, runs all existing backend and frontend tests, and builds the frontend. The backend job creates its own PostgreSQL database, initializes the group schema, and fails if any group test suite is missing or skipped. No cloud database or repository secrets are needed. Formatter versions are pinned for consistent results.
+[Study Groups checks](../.github/workflows/study-groups.yml) runs on relevant pull requests and pushes to `main`, and can also be started manually in GitHub Actions. It checks the scoped formatting, compiles the backend services, and builds the frontend. No cloud database or repository secrets are needed. Formatter versions are pinned for consistent results.

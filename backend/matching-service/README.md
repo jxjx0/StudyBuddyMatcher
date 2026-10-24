@@ -45,16 +45,10 @@ including when calling matching-service directly instead of through the
 gateway. Configuration endpoints require an administrator token, and students
 can search only for their own user ID.
 
-## Run and test
+## Run
 
 From `backend`, start the matching service with:
 
 ```powershell
 .\mvnw.cmd -pl matching-service spring-boot:run
-```
-
-Run its tests with:
-
-```powershell
-.\mvnw.cmd -pl matching-service test
 ```

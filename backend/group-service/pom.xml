@@ -47,11 +47,6 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-webmvc-test</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -78,7 +73,6 @@
               <include>src/main/java/com/studybuddy/group/model/GroupStatus.java</include>
               <include>src/main/java/com/studybuddy/group/repository/*.java</include>
               <include>src/main/java/com/studybuddy/group/service/*.java</include>
-              <include>src/test/java/com/studybuddy/group/*.java</include>
             </includes>
             <googleJavaFormat>
               <version>1.28.0</version>

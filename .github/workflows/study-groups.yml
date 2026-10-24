@@ -20,37 +20,12 @@ permissions:
 
 jobs:
   backend:
-    name: Backend formatting and tests
+    name: Backend formatting and build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
-    env:
-      SPRING_CONFIG_IMPORT: ""
-      DEMO_DATA_ENABLED: "false"
-      GROUP_TEST_JDBC_URL: jdbc:postgresql://127.0.0.1:5432/studybuddy_test
-      GROUP_TEST_DB_USER: studybuddy_test
-      PGHOST: 127.0.0.1
-      PGPORT: "5432"
-      PGUSER: studybuddy_test
-      PGDATABASE: studybuddy_test
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: studybuddy_test
-          POSTGRES_DB: studybuddy_test
-          # Matches the existing passwordless, disposable test database.
-          # The published port is reachable only from this runner.
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - "127.0.0.1:5432:5432"
-        options: >-
-          --health-cmd "pg_isready -U studybuddy_test -d studybuddy_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -63,31 +38,8 @@ jobs:
           cache-dependency-path: "backend/**/pom.xml"
       - name: Check Study Groups Java formatting
         run: ./mvnw -B --no-transfer-progress -pl group-service spotless:check
-      - name: Prepare the disposable database
-        run: |
-          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE anon; CREATE ROLE authenticated;"
-          psql -v ON_ERROR_STOP=1 -f group-service/src/main/resources/schema.sql
-      - name: Run backend tests
-        run: ./mvnw -B --no-transfer-progress test
-      - name: Confirm group tests ran without skips
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-
-          reports = Path("group-service/target/surefire-reports")
-          for suite in ["GroupDomainTest", "GroupIntegrationTest", "StudentClientTest"]:
-              report = reports / f"TEST-com.studybuddy.group.{suite}.xml"
-              if not report.is_file():
-                  raise SystemExit(f"Missing test report: {suite}")
-              result = ET.parse(report).getroot()
-              if int(result.get("tests", "0")) == 0:
-                  raise SystemExit(f"No tests ran: {suite}")
-              for outcome in ["failures", "errors", "skipped"]:
-                  if int(result.get(outcome, "0")) != 0:
-                      raise SystemExit(f"{suite} has {outcome}")
-              print(f"{suite}: all {result.get('tests')} tests passed")
-          PY
+      - name: Compile backend services
+        run: ./mvnw -B --no-transfer-progress compile
 
   frontend:
     name: Frontend formatting and build

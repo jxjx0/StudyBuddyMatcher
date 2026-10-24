@@ -31,7 +31,6 @@ This starts Vite's dev server (default: [http://localhost:5173](http://localhost
 ```bash
 npm run build    # build for production (outputs to frontend/dist)
 npm run start    # preview the production build locally
-npm test         # utility and study-group UI regression tests
 ```
 
 ## Backend
