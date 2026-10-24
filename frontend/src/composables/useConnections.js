@@ -1,7 +1,23 @@
 import { ref } from "vue";
-import { user } from "./useAuth";
+import { user, token } from "./useAuth";
 import { api } from "../services/api";
 import { toast } from "./useNotifications";
+
+/**
+ * Fetch a student's public profile.
+ *
+ * Returns null when the account has been definitively deleted (HTTP 404).
+ * Re-throws for any other error (e.g. service temporarily down, 500) so the
+ * caller can show a placeholder instead of removing the connection.
+ */
+async function fetchStudentOrNull(studentId) {
+  const session = token.value;
+  const headers = session ? { Authorization: `Bearer ${session}` } : {};
+  const response = await fetch(`/api/students/${encodeURIComponent(studentId)}`, { headers });
+  if (response.status === 404) return null; // account definitively deleted
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  return response.json();
+}
 
 const incomingRequests = ref([]);
 const outgoingRequests = ref([]);
@@ -76,10 +92,20 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
                 ? connection.studentBId
                 : connection.studentAId;
             try {
-              const [partner, contact] = await Promise.all([
-                api(`/api/students/${partnerId}`),
-                api(`/api/connections/${connection.connectionId}/contact`).catch(() => ({})),
-              ]);
+              const partner = await fetchStudentOrNull(partnerId);
+              if (partner === null) {
+                // Account confirmed deleted (404) — clean up the orphaned record
+                // and exclude it from the list so a notification can be shown.
+                deletedPartnersCount++;
+                void api(
+                  `/api/connections/${connection.connectionId}?requesterId=${encodeURIComponent(currentStudentId)}`,
+                  { method: "DELETE" },
+                ).catch(() => {});
+                return null;
+              }
+              const contact = await api(
+                `/api/connections/${connection.connectionId}/contact`,
+              ).catch(() => ({}));
               return {
                 ...connection,
                 partnerId,
@@ -88,12 +114,16 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
                 partnerContactNumber: contact.contactNumber || "",
               };
             } catch {
-              deletedPartnersCount++;
-              // Auto-clean the inactive/orphaned connection from connection-service
-              void api(`/api/connections/${connection.connectionId}?requesterId=${encodeURIComponent(currentStudentId)}`, {
-                method: "DELETE",
-              }).catch(() => {});
-              return null;
+              // Transient failure (service restarting, network hiccup, etc.) —
+              // never delete a real connection record for a temporary error.
+              // Show a placeholder so the connection stays visible and safe.
+              return {
+                ...connection,
+                partnerId,
+                partnerName: "Study Buddy",
+                partnerEmail: "",
+                partnerContactNumber: "",
+              };
             }
           }),
         ),
@@ -101,7 +131,6 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
 
     if (user.value?.userId !== currentStudentId) return false;
 
-    // Filter out deleted students
     incomingRequests.value = loadedIncoming.filter(Boolean);
     outgoingRequests.value = loadedOutgoing.filter(Boolean);
     activeConnections.value = loadedConnections.filter(Boolean);
