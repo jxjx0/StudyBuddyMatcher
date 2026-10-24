@@ -192,6 +192,17 @@ function resetFilters() {
                   {{ school }}
                 </option>
               </select></label
+            ><label v-if="accountDraft.role === 'Student'" class="field"
+              ><span>Programme</span
+              ><input v-model="accountDraft.programme" maxlength="200" required
+            /></label
+            ><label v-if="accountDraft.role === 'Student'" class="field"
+              ><span>Year of study</span
+              ><select v-model.number="accountDraft.yearOfStudy" required>
+                <option v-for="year in 5" :key="year" :value="year">
+                  Year {{ year }}
+                </option>
+              </select></label
             ><label v-if="editingAccount" class="field"
               ><span>Status</span
               ><select v-model="accountDraft.status">

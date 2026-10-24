@@ -54,7 +54,10 @@ public class AdminController {
 		else if ("STUDENT".equalsIgnoreCase(request.role())) {
 			Student student = new Student(null, request.email(), request.password(), AccountStatus.ACTIVE);
 			student.setName(request.name());
-			student.setSchool(request.school());
+			student.setSchool(request.school() == null || request.school().isBlank() ? "Undeclared" : request.school());
+			student.setProgramme(request.programme() == null || request.programme().isBlank()
+					? "Undeclared" : request.programme());
+			student.setYearOfStudy(request.yearOfStudy() == null ? 1 : request.yearOfStudy());
 			account = student;
 		} else throw new IllegalArgumentException("role must be STUDENT or ADMIN");
 		return ResponseEntity.status(HttpStatus.CREATED).body(AccountResponse.from(userAccountService.createUserAccount(account)));
@@ -63,7 +66,8 @@ public class AdminController {
 	@org.springframework.web.bind.annotation.PutMapping("/accounts/{userId}")
 	public AccountResponse updateAccount(@PathVariable String userId,
 			@Valid @org.springframework.web.bind.annotation.RequestBody UpdateAccountRequest request) {
-		return AccountResponse.from(userAccountService.updateUserAccount(userId, request.email(), request.name(), request.school()));
+		return AccountResponse.from(userAccountService.updateUserAccount(userId, request.email(), request.name(),
+				request.school(), request.programme(), request.yearOfStudy()));
 	}
 
 	@GetMapping("/accounts/{userId}/status")
