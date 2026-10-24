@@ -1,22 +1,29 @@
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { user, token } from "./useAuth";
 import { api } from "../services/api";
 import { toast } from "./useNotifications";
 
+const studentProfileCache = new Map();
+
 /**
- * Fetch a student's public profile.
+ * Fetch a student's public profile with in-memory caching.
  *
  * Returns null when the account has been definitively deleted (HTTP 404).
  * Re-throws for any other error (e.g. service temporarily down, 500) so the
  * caller can show a placeholder instead of removing the connection.
  */
 async function fetchStudentOrNull(studentId) {
+  if (studentProfileCache.has(studentId)) {
+    return studentProfileCache.get(studentId);
+  }
   const session = token.value;
   const headers = session ? { Authorization: `Bearer ${session}` } : {};
   const response = await fetch(`/api/students/${encodeURIComponent(studentId)}`, { headers });
   if (response.status === 404) return null; // account definitively deleted
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  return response.json();
+  const data = await response.json();
+  studentProfileCache.set(studentId, data);
+  return data;
 }
 
 const incomingRequests = ref([]);
@@ -25,6 +32,30 @@ const activeConnections = ref([]);
 const loading = ref(false);
 const error = ref("");
 const unreadConnectionUpdates = ref(0);
+const hasLoadedOnce = ref(false);
+let cachedUserId = null;
+
+function resetConnectionsCache() {
+  incomingRequests.value = [];
+  outgoingRequests.value = [];
+  activeConnections.value = [];
+  loading.value = false;
+  error.value = "";
+  unreadConnectionUpdates.value = 0;
+  hasLoadedOnce.value = false;
+  cachedUserId = null;
+  studentProfileCache.clear();
+}
+
+// Automatically reset cached connections whenever the logged-in user changes or signs out
+watch(
+  () => user.value?.userId,
+  (newId, oldId) => {
+    if (newId !== oldId) {
+      resetConnectionsCache();
+    }
+  },
+);
 
 function markConnectionUpdatesRead() {
   unreadConnectionUpdates.value = 0;
@@ -47,7 +78,14 @@ async function checkForConnectionUpdates() {
 async function loadConnectionsAndRequests({ silent = false } = {}) {
   const currentStudentId = user.value?.userId;
   if (!currentStudentId) return false;
-  if (!silent) loading.value = true;
+
+  // If the user changed, reset before loading
+  if (cachedUserId !== currentStudentId) {
+    resetConnectionsCache();
+  }
+
+  // If we've already loaded once for this user, keep the existing data visible and refresh in background
+  if (!silent && !hasLoadedOnce.value) loading.value = true;
   error.value = "";
   try {
     const studentId = encodeURIComponent(currentStudentId);
@@ -138,6 +176,8 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
     outgoingRequests.value = loadedOutgoing.filter(Boolean);
     activeConnections.value = loadedConnections.filter(Boolean);
     unreadConnectionUpdates.value = incomingRequests.value.length;
+    hasLoadedOnce.value = true;
+    cachedUserId = currentStudentId;
 
     if (deletedPartnersCount > 0 && !silent) {
       toast(
@@ -234,6 +274,8 @@ export function useConnections() {
     loading,
     error,
     unreadConnectionUpdates,
+    hasLoadedOnce,
+    resetConnectionsCache,
     loadConnectionsAndRequests,
     checkForConnectionUpdates,
     markConnectionUpdatesRead,
