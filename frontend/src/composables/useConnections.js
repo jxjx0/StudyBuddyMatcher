@@ -92,7 +92,13 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
                 ? connection.studentBId
                 : connection.studentAId;
             try {
-              const partner = await fetchStudentOrNull(partnerId);
+              // Fetch the partner profile and their contact details in parallel —
+              // neither depends on the other, so there is no reason to wait for
+              // one before starting the other.
+              const [partner, contact] = await Promise.all([
+                fetchStudentOrNull(partnerId),
+                api(`/api/connections/${connection.connectionId}/contact`).catch(() => ({})),
+              ]);
               if (partner === null) {
                 // Account confirmed deleted (404) — clean up the orphaned record
                 // and exclude it from the list so a notification can be shown.
@@ -103,9 +109,6 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
                 ).catch(() => {});
                 return null;
               }
-              const contact = await api(
-                `/api/connections/${connection.connectionId}/contact`,
-              ).catch(() => ({}));
               return {
                 ...connection,
                 partnerId,
