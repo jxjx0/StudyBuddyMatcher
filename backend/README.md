@@ -29,7 +29,7 @@ See [Supabase connection modes](https://supabase.com/docs/guides/database/connec
 
 This backend uses the PostgreSQL connection directly, so it does **not** need the Supabase project URL, anon/publishable key, or service-role key. The database password is the credential used by the backend. Never put the database password or service-role key in the frontend.
 
-`SUPABASE_JDBC_URL`, `SUPABASE_DB_USER`, and `SUPABASE_DB_PASSWORD` have local-only fallback values for a local PostgreSQL database. For Supabase, replace them with the values above. `JWT_SECRET` has no insecure fallback; the gateway, user-service, and connection-service fail to start if it is missing or shorter than 32 characters. `CONTACT_SERVICE_SECRET` must be a separate random secret shared only by user-service and connection-service; both services fail to start if it is missing or shorter than 32 characters. It protects the internal contact lookup and must never be sent to the browser.
+`SUPABASE_JDBC_URL`, `SUPABASE_DB_USER`, and `SUPABASE_DB_PASSWORD` have local-only fallback values for a local PostgreSQL database. For Supabase, replace them with the values above. `JWT_SECRET` has no insecure fallback; the gateway, user-service, matching-service, and connection-service fail to start if it is missing or shorter than 32 characters. `CONTACT_SERVICE_SECRET` must be a separate random secret shared only by user-service and connection-service; both services fail to start if it is missing or shorter than 32 characters. It protects the internal contact lookup and must never be sent to the browser.
 
 ## Demo population
 
@@ -64,7 +64,7 @@ cd backend
 
 The frontend's Vite server proxies `/api` to `http://localhost:8080`. Override it with `VITE_API_TARGET` if the gateway runs elsewhere.
 
-The admin matching configuration and matching API also require `matching-service` to be running. It uses the same Supabase database settings in `backend/.env` to persist the matching strategy and criteria.
+The admin matching configuration and matching API also require `matching-service` to be running. It uses the same Supabase database settings in `backend/.env` to persist the matching strategy and criteria. Like the gateway, user-service and connection-service, matching-service validates JWTs with the shared `JWT_SECRET`; direct requests to its port must include a bearer token. Match searches are limited to the signed-in student's own profile unless the caller is an administrator.
 
 ## Authentication API
 
@@ -76,7 +76,7 @@ Passwords are BCrypt hashes in the database. JWTs are stateless HS256 tokens wit
 
 ## Database notes
 
-The shared cloud database stores accounts in `user_accounts`, profiles in `students`, and course references in `courses`. Matching settings use `matching_configuration` and `matching_criteria`. Study groups, membership and join requests use the three group-service tables. The Java backend accesses these tables through JDBC and checks group permissions using its own authenticated user tokens.
+The shared cloud database stores accounts in `user_accounts`, student profiles in `students` (mirrored to `user_accounts.profile_data` for account administration), and course references in `courses`. Matching settings use `matching_configuration` and `matching_criteria`. Study groups, membership and join requests use the three group-service tables. The Java backend accesses these tables through JDBC and checks group permissions using its own authenticated user tokens.
 
 Contact information is returned to a student only through an active study buddy connection. The connection-service checks the caller's JWT and connection membership before using the internal contact endpoint in user-service. Configure `CONTACT_SERVICE_SECRET` as described above; do not expose it to the frontend.
 
