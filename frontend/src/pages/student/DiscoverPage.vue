@@ -146,7 +146,7 @@ function resetFilters() {
   };
 }
 function viewProfile(id) {
-  router.push({ name: "student-public-profile", query: { id } });
+  router.push({ name: "student-public-profile", query: { id, from: "discover" } });
 }
 function requestStatus(studentId) {
   if (

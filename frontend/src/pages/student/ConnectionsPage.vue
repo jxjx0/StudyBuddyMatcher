@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { CalendarDays, Check, Mail, Phone, UserRound, X } from "lucide-vue-next";
 import { useConnections } from "../../composables/useConnections";
 
@@ -16,6 +17,7 @@ const {
   endStudyConnection,
 } = useConnections();
 
+const router = useRouter();
 const connectionTab = ref("active");
 const requestTab = ref("incoming");
 
@@ -27,6 +29,12 @@ function initials(name) {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+}
+
+function viewProfile(partnerId) {
+  if (partnerId) {
+    router.push({ name: "student-public-profile", query: { id: partnerId, from: "connections" } });
+  }
 }
 
 onMounted(async () => {
@@ -131,13 +139,21 @@ onMounted(async () => {
                 <Phone :size="17" aria-hidden="true" /> Phone not provided
               </p>
             </div>
-            <button
-              class="secondary-button end-connection"
-              @click="endStudyConnection(connection.connectionId)"
-            >
-              <X :size="16" aria-hidden="true" />
-              End connection
-            </button>
+            <div class="connection-actions">
+              <button
+                class="secondary-button"
+                @click="viewProfile(connection.partnerId)"
+              >
+                View profile
+              </button>
+              <button
+                class="danger-button end-connection"
+                @click="endStudyConnection(connection.connectionId)"
+              >
+                <X :size="16" aria-hidden="true" />
+                End connection
+              </button>
+            </div>
           </article>
         </div>
       </section>
@@ -306,7 +322,7 @@ onMounted(async () => {
 }
 
 .connection-card {
-  grid-template-columns: minmax(200px, 0.85fr) minmax(240px, 1.15fr) auto;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1.2fr) auto;
 }
 
 .request-card {
@@ -369,8 +385,15 @@ onMounted(async () => {
   flex: 0 0 auto;
 }
 
-.end-connection {
+.connection-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   justify-self: end;
+  white-space: nowrap;
+}
+
+.end-connection {
   white-space: nowrap;
 }
 
@@ -468,10 +491,11 @@ onMounted(async () => {
     grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr);
   }
 
-  .end-connection,
+  .connection-actions,
   .request-actions {
     grid-column: 2;
     justify-self: start;
+    flex-direction: row;
   }
 }
 
@@ -504,11 +528,12 @@ onMounted(async () => {
     flex-direction: column;
   }
 
-  .end-connection,
+  .connection-actions,
   .request-actions {
     grid-column: auto;
     justify-self: stretch;
     justify-content: flex-start;
+    flex-direction: column;
   }
 }
 </style>

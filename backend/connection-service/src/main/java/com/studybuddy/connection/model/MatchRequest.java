@@ -59,12 +59,24 @@ public class MatchRequest {
 		return status;
 	}
 
+	public void setStatus(MatchRequestStatus status) {
+		this.status = status;
+	}
+
 	public LocalDateTime getCreatedAt() {
 		return createdAt;
 	}
 
+	public void setCreatedAt(LocalDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
 	public LocalDateTime getRespondedAt() {
 		return respondedAt;
+	}
+
+	public void setRespondedAt(LocalDateTime respondedAt) {
+		this.respondedAt = respondedAt;
 	}
 
 	/**

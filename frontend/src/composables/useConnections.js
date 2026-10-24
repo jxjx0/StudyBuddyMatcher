@@ -9,39 +9,8 @@ const activeConnections = ref([]);
 const loading = ref(false);
 const error = ref("");
 const unreadConnectionUpdates = ref(0);
-const notificationStateByStudent = new Map();
-
-function updateNotificationState(studentId, incoming) {
-  const incomingIds = new Set(incoming.map((request) => request.requestId));
-  let state = notificationStateByStudent.get(studentId);
-
-  if (!state) {
-    state = {
-      incomingIds,
-      unreadIds: new Set(),
-    };
-    notificationStateByStudent.set(studentId, state);
-  } else {
-    for (const requestId of incomingIds) {
-      if (!state.incomingIds.has(requestId))
-        state.unreadIds.add(`request:${requestId}`);
-    }
-    for (const requestId of state.incomingIds) {
-      if (!incomingIds.has(requestId))
-        state.unreadIds.delete(`request:${requestId}`);
-    }
-    state.incomingIds = incomingIds;
-  }
-
-  if (user.value?.userId === studentId)
-    unreadConnectionUpdates.value = state.unreadIds.size;
-}
 
 function markConnectionUpdatesRead() {
-  const studentId = user.value?.userId;
-  if (!studentId) return;
-  const state = notificationStateByStudent.get(studentId);
-  if (state) state.unreadIds.clear();
   unreadConnectionUpdates.value = 0;
 }
 
@@ -49,12 +18,9 @@ async function checkForConnectionUpdates() {
   const studentId = user.value?.userId;
   if (!studentId) return false;
   try {
-    const encodedId = encodeURIComponent(studentId);
-    const incoming = await api(
-      `/api/match-requests/pending?studentId=${encodedId}`,
-    );
+    const res = await api(`/api/match-requests/pending/count`);
     if (user.value?.userId !== studentId) return false;
-    updateNotificationState(studentId, incoming);
+    unreadConnectionUpdates.value = res.count ?? 0;
     return true;
   } catch (problem) {
     console.error("Could not check for connection updates.", problem);
@@ -74,19 +40,34 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
       api(`/api/match-requests/outgoing-pending?studentId=${studentId}`),
       api(`/api/connections?studentId=${studentId}`),
     ]);
+
+    let deletedPartnersCount = 0;
+
     const [loadedIncoming, loadedOutgoing, loadedConnections] =
       await Promise.all([
         Promise.all(
-          incoming.map(async (request) => {
-            const sender = await api(`/api/students/${request.senderId}`);
-            return { ...request, senderName: sender.name };
-          }),
+          incoming
+            .filter((req) => req && req.requestId)
+            .map(async (request) => {
+              try {
+                const sender = await api(`/api/students/${request.senderId}`);
+                return { ...request, senderName: sender.name };
+              } catch {
+                return null;
+              }
+            }),
         ),
         Promise.all(
-          outgoing.map(async (request) => {
-            const recipient = await api(`/api/students/${request.recipientId}`);
-            return { ...request, recipientName: recipient.name };
-          }),
+          outgoing
+            .filter((req) => req && req.requestId)
+            .map(async (request) => {
+              try {
+                const recipient = await api(`/api/students/${request.recipientId}`);
+                return { ...request, recipientName: recipient.name };
+              } catch {
+                return null;
+              }
+            }),
         ),
         Promise.all(
           connections.map(async (connection) => {
@@ -94,30 +75,53 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
               connection.studentAId === currentStudentId
                 ? connection.studentBId
                 : connection.studentAId;
-            const [partner, contact] = await Promise.all([
-              api(`/api/students/${partnerId}`),
-              api(`/api/connections/${connection.connectionId}/contact`),
-            ]);
-            return {
-              ...connection,
-              partnerName: partner.name,
-              partnerEmail: contact.email,
-              partnerContactNumber: contact.contactNumber,
-            };
+            try {
+              const [partner, contact] = await Promise.all([
+                api(`/api/students/${partnerId}`),
+                api(`/api/connections/${connection.connectionId}/contact`).catch(() => ({})),
+              ]);
+              return {
+                ...connection,
+                partnerId,
+                partnerName: partner.name,
+                partnerEmail: contact.email || "",
+                partnerContactNumber: contact.contactNumber || "",
+              };
+            } catch {
+              deletedPartnersCount++;
+              // Auto-clean the inactive/orphaned connection from connection-service
+              void api(`/api/connections/${connection.connectionId}?requesterId=${encodeURIComponent(currentStudentId)}`, {
+                method: "DELETE",
+              }).catch(() => {});
+              return null;
+            }
           }),
         ),
       ]);
+
     if (user.value?.userId !== currentStudentId) return false;
-    incomingRequests.value = loadedIncoming;
-    outgoingRequests.value = loadedOutgoing;
-    activeConnections.value = loadedConnections;
-    updateNotificationState(currentStudentId, loadedIncoming);
+
+    // Filter out deleted students
+    incomingRequests.value = loadedIncoming.filter(Boolean);
+    outgoingRequests.value = loadedOutgoing.filter(Boolean);
+    activeConnections.value = loadedConnections.filter(Boolean);
+    unreadConnectionUpdates.value = incomingRequests.value.length;
+
+    if (deletedPartnersCount > 0 && !silent) {
+      toast(
+        deletedPartnersCount === 1
+          ? "A study buddy connection was removed because the student's account was deleted."
+          : `${deletedPartnersCount} study buddy connections were removed because their accounts were deleted.`,
+        "info",
+      );
+    }
+
     return true;
   } catch (problem) {
     error.value = `Could not load requests and connections: ${problem.message}`;
     return false;
   } finally {
-      if (!silent) loading.value = false;
+    if (!silent) loading.value = false;
   }
 }
 

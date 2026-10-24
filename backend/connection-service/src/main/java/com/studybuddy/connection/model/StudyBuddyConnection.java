@@ -45,8 +45,20 @@ public class StudyBuddyConnection {
 		return startedAt;
 	}
 
+	public void setStartedAt(LocalDateTime startedAt) {
+		this.startedAt = startedAt;
+	}
+
 	public LocalDateTime getEndedAt() {
 		return endedAt;
+	}
+
+	public void setEndedAt(LocalDateTime endedAt) {
+		this.endedAt = endedAt;
+	}
+
+	public void setActive(boolean active) {
+		this.active = active;
 	}
 
 	public void end() {

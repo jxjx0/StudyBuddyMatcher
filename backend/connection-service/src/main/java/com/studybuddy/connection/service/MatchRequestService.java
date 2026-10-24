@@ -52,7 +52,7 @@ public class MatchRequestService {
 
 		for (int i = 0; i < recipientRequests.size(); i++) {
 			MatchRequest req = recipientRequests.get(i);
-			
+
 			if (req.isPending()) {
 				pendingRequests.add(req);
 			}
@@ -74,6 +74,11 @@ public class MatchRequestService {
 			}
 		}
 		return pendingRequests;
+	}
+
+	public int countPendingFor(String studentId) {
+		if (studentId == null) return 0;
+		return matchRequestRepository.countPendingForRecipient(studentId);
 	}
 
 	public MatchRequest send(String senderId, String recipientId, String message) {
@@ -152,7 +157,11 @@ public class MatchRequestService {
 		}
 		String otherStudentId = connection.getOtherStudentId(requesterId);
 		if (otherStudentId == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-		return studentClient.findContactDetails(otherStudentId);
+		try {
+			return studentClient.findContactDetails(otherStudentId);
+		} catch (Exception e) {
+			return new StudentContactDto(otherStudentId, "Former Student", "", "");
+		}
 	}
 
 	public void endConnection(String connectionId, String requesterId) {

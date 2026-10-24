@@ -1,21 +1,65 @@
 <script setup>
-import { ref, watch, onScopeDispose } from "vue";
+import { computed, ref, watch, onMounted, onScopeDispose } from "vue";
 import { useRoute } from "vue-router";
 import { useAppState } from "../../composables/useAppState";
 import { useConnections } from "../../composables/useConnections";
-const { loadPublicProfile } = useAppState();
-const { sendMatchRequest } = useConnections();
+const { loadPublicProfile, user } = useAppState();
+const {
+  outgoingRequests,
+  activeConnections,
+  sendMatchRequest,
+  loadConnectionsAndRequests,
+} = useConnections();
 const route = useRoute();
 const loading = ref(false);
 const error = ref("");
 const selectedProfile = ref(null);
+const sending = ref(false);
+const justSent = ref(false);
 let controller;
+
+const connectionStatus = computed(() => {
+  const profileId = selectedProfile.value?.id;
+  if (!profileId) return "Connect";
+  if (user.value?.userId === profileId) return "Self";
+  if (
+    activeConnections.value.some(
+      (conn) => conn.studentAId === profileId || conn.studentBId === profileId,
+    )
+  ) {
+    return "Connected";
+  }
+  if (
+    justSent.value ||
+    outgoingRequests.value.some((req) => req.recipientId === profileId)
+  ) {
+    return "Request Sent";
+  }
+  return "Connect";
+});
+
+async function handleConnect() {
+  if (!selectedProfile.value?.id || connectionStatus.value !== "Connect" || sending.value) {
+    return;
+  }
+  sending.value = true;
+  try {
+    const success = await sendMatchRequest(selectedProfile.value.id);
+    if (success) {
+      justSent.value = true;
+    }
+  } finally {
+    sending.value = false;
+  }
+}
+
 async function load() {
   controller?.abort();
   controller = new AbortController();
   const request = controller;
   error.value = "";
   selectedProfile.value = null;
+  justSent.value = false;
   if (!route.query.id) {
     error.value =
       "Choose a student from Discover buddies to view their profile.";
@@ -32,13 +76,24 @@ async function load() {
     if (request === controller) loading.value = false;
   }
 }
+
+const backDestination = computed(() => {
+  if (route.query.from === "connections") {
+    return { path: "/student/connections", label: "Back to connections" };
+  }
+  return { path: "/student/discover", label: "Back to discover" };
+});
+
+onMounted(() => {
+  void loadConnectionsAndRequests({ silent: true });
+});
 watch(() => route.query.id, load, { immediate: true });
 onScopeDispose(() => controller?.abort());
 </script>
 <template>
   <section class="page-body narrow-page">
-    <RouterLink class="back-link" to="/student/discover"
-      >Back to discover</RouterLink
+    <RouterLink class="back-link" :to="backDestination.path"
+      >{{ backDestination.label }}</RouterLink
     >
     <header class="page-heading">
       <h1>Public study profile</h1>
@@ -89,14 +144,13 @@ onScopeDispose(() => controller?.abort());
         Contact details remain private until your connection is accepted.
       </p>
       <div class="form-actions">
-        <RouterLink class="secondary-button" to="/student/groups"
-          >Explore study groups</RouterLink
-        >
         <button
+          v-if="connectionStatus !== 'Self'"
           class="primary-button"
-          @click="sendMatchRequest(selectedProfile.id)"
+          :disabled="sending || connectionStatus !== 'Connect'"
+          @click="handleConnect"
         >
-          Connect
+          {{ sending ? "Sending…" : connectionStatus }}
         </button>
       </div>
     </section>

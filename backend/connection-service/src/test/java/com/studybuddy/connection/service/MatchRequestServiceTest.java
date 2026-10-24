@@ -9,6 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -22,19 +24,23 @@ class MatchRequestServiceTest {
 	private static final String STUDENT_B = "student-b";
 
 	private MatchRequestService service;
+	private MatchRequestRepository matchRequests;
 	private StudyBuddyConnectionRepository connections;
 	private StudentClient studentClient;
 
 	@BeforeEach
 	void setUp() {
-		connections = new StudyBuddyConnectionRepository();
+		matchRequests = mock(MatchRequestRepository.class);
+		connections = mock(StudyBuddyConnectionRepository.class);
 		studentClient = mock(StudentClient.class);
-		service = new MatchRequestService(new MatchRequestRepository(), connections, studentClient);
+		service = new MatchRequestService(matchRequests, connections, studentClient);
 	}
 
 	@Test
 	void returnsPartnerContactForActiveConnectionMember() {
 		StudyBuddyConnection connection = connection();
+		when(connections.findById(connection.getConnectionId())).thenReturn(Optional.of(connection));
+
 		StudentContactDto contact = new StudentContactDto(STUDENT_B, "Study Buddy", "buddy@example.edu",
 				"+65 8123 4567");
 		when(studentClient.findContactDetails(STUDENT_B)).thenReturn(contact);
@@ -48,6 +54,7 @@ class MatchRequestServiceTest {
 	@Test
 	void doesNotFetchContactForNonMember() {
 		StudyBuddyConnection connection = connection();
+		when(connections.findById(connection.getConnectionId())).thenReturn(Optional.of(connection));
 
 		ResponseStatusException exception = assertThrows(ResponseStatusException.class,
 				() -> service.findActiveConnectionContact(connection.getConnectionId(), "unrelated-student"));
@@ -60,6 +67,7 @@ class MatchRequestServiceTest {
 	void doesNotFetchContactAfterConnectionEnds() {
 		StudyBuddyConnection connection = connection();
 		connection.end();
+		when(connections.findById(connection.getConnectionId())).thenReturn(Optional.of(connection));
 
 		ResponseStatusException exception = assertThrows(ResponseStatusException.class,
 				() -> service.findActiveConnectionContact(connection.getConnectionId(), STUDENT_A));
@@ -70,8 +78,9 @@ class MatchRequestServiceTest {
 
 	private StudyBuddyConnection connection() {
 		StudyBuddyConnection connection = new StudyBuddyConnection();
+		connection.setConnectionId("test-connection-id");
 		connection.setStudentAId(STUDENT_A);
 		connection.setStudentBId(STUDENT_B);
-		return connections.save(connection);
+		return connection;
 	}
 }
