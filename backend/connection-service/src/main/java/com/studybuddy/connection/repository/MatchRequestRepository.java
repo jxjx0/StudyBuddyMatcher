@@ -1,70 +1,101 @@
 package com.studybuddy.connection.repository;
 
 import com.studybuddy.connection.model.MatchRequest;
+import com.studybuddy.connection.model.MatchRequestStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Storage for match requests. Stubbed - nothing is stored yet.
- */
 @Repository
 public class MatchRequestRepository {
+	private final JdbcTemplate jdbc;
 
-	private final Map<String, MatchRequest> storage = new ConcurrentHashMap<>();
+	private final RowMapper<MatchRequest> rowMapper = this::mapRequest;
+
+	public MatchRequestRepository(JdbcTemplate jdbc) {
+		this.jdbc = jdbc;
+	}
 
 	public List<MatchRequest> findAll() {
-		return new ArrayList<>(storage.values());
+		return jdbc.query("SELECT * FROM match_requests ORDER BY created_at DESC, request_id", rowMapper);
 	}
 
 	public Optional<MatchRequest> findById(String requestId) {
 		if (requestId == null) return Optional.empty();
-		return Optional.ofNullable(storage.get(requestId));
+		List<MatchRequest> requests = jdbc.query(
+				"SELECT * FROM match_requests WHERE request_id = ?",
+				rowMapper, UUID.fromString(requestId));
+		return requests.stream().findFirst();
 	}
 
 	public List<MatchRequest> findByRecipientId(String recipientId) {
 		if (recipientId == null) return List.of();
-
-		List<MatchRequest> allRequests = new ArrayList<>(storage.values());
-		List<MatchRequest> matchingRequests = new ArrayList<>();
-
-		for (int i = 0; i < allRequests.size(); i++) {
-			MatchRequest req = allRequests.get(i);
-			
-			if (recipientId.equals(req.getRecipientId())) {
-				matchingRequests.add(req);
-			}
-		}
-		return matchingRequests;
+		return jdbc.query(
+				"SELECT * FROM match_requests WHERE recipient_id = ? ORDER BY created_at DESC, request_id",
+				rowMapper, UUID.fromString(recipientId));
 	}
 
 	public List<MatchRequest> findBySenderId(String senderId) {
 		if (senderId == null) return List.of();
-
-		List<MatchRequest> allRequests = new ArrayList<>(storage.values());
-		List<MatchRequest> matchingRequests = new ArrayList<>();
-
-		for (int i = 0; i < allRequests.size(); i++) {
-			MatchRequest req = allRequests.get(i);
-
-			if (senderId.equals(req.getSenderId())) {
-				matchingRequests.add(req);
-			}
-		}
-		return matchingRequests;
+		return jdbc.query(
+				"SELECT * FROM match_requests WHERE sender_id = ? ORDER BY created_at DESC, request_id",
+				rowMapper, UUID.fromString(senderId));
 	}
 
 	public MatchRequest save(MatchRequest request) {
 		if (request == null) return null;
-		if (request.getRequestId() == null || request.getRequestId().trim().isEmpty()) {
+		if (request.getRequestId() == null || request.getRequestId().isBlank()) {
 			request.setRequestId(UUID.randomUUID().toString());
 		}
-		storage.put(request.getRequestId(), request);
+		jdbc.update("""
+				INSERT INTO match_requests
+					(request_id, sender_id, recipient_id, message, status, created_at, responded_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT (request_id) DO UPDATE SET
+					sender_id = EXCLUDED.sender_id,
+					recipient_id = EXCLUDED.recipient_id,
+					message = EXCLUDED.message,
+					status = EXCLUDED.status,
+					created_at = EXCLUDED.created_at,
+					responded_at = EXCLUDED.responded_at
+				""",
+				UUID.fromString(request.getRequestId()),
+				UUID.fromString(request.getSenderId()),
+				UUID.fromString(request.getRecipientId()),
+				request.getMessage() == null ? "" : request.getMessage(),
+				request.getStatus().name(),
+				toTimestamp(request.getCreatedAt()),
+				toTimestamp(request.getRespondedAt()));
 		return request;
+	}
+
+	private MatchRequest mapRequest(ResultSet resultSet, int rowNumber) throws SQLException {
+		return MatchRequest.restore(
+				resultSet.getString("request_id"),
+				resultSet.getString("sender_id"),
+				resultSet.getString("recipient_id"),
+				resultSet.getString("message"),
+				MatchRequestStatus.valueOf(resultSet.getString("status")),
+				toLocalDateTime(resultSet.getTimestamp("created_at")),
+				toLocalDateTime(resultSet.getTimestamp("responded_at")));
+	}
+
+	private static Timestamp toTimestamp(LocalDateTime value) {
+		return value == null ? null
+				: Timestamp.from(value.atZone(ZoneId.systemDefault()).toInstant());
+	}
+
+	private static LocalDateTime toLocalDateTime(Timestamp value) {
+		return value == null ? null
+				: value.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 	}
 }

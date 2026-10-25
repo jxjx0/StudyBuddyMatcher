@@ -6,6 +6,17 @@ spring:
     import: "optional:file:./.env[.properties],optional:file:../.env[.properties],optional:file:./backend/.env[.properties],optional:file:../backend/.env[.properties]"
   application:
     name: connection-service
+  datasource:
+    url: ${SUPABASE_JDBC_URL:jdbc:postgresql://localhost:5432/studybuddy}
+    username: ${SUPABASE_DB_USER:postgres}
+    password: ${SUPABASE_DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:2}
+      minimum-idle: ${DB_MIN_IDLE:0}
+      idle-timeout: 60000
+  sql:
+    init:
+      mode: never
 
 # Other services this one calls. Kept in configuration rather than hard-coded
 # in Java, so they can be repointed without a rebuild.

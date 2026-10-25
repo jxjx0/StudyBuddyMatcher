@@ -715,6 +715,17 @@ test("leaders see pending work separately from completed request history", async
   expect(history.textContent).not.toContain("Time unavailable");
 });
 
+test("member removal confirmation explains the final action", async () => {
+  await mountPage();
+  await openGroup();
+  await click("Remove Bob", topDialog());
+
+  expect(topDialog().textContent).toContain(
+    "Press “Remove member” to remove this student from the group.",
+  );
+  expect(button("Remove member", topDialog())).toBeDefined();
+});
+
 test("My requests separates pending applications from dated past decisions", async () => {
   const request = { groupId: "group-1", createdAt: "2026-10-08T10:00:00Z" };
   ownRequests = [

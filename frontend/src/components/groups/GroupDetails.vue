@@ -68,6 +68,7 @@ function decide(request, decision) {
 function confirmRemove(member) {
   confirmation.value = {
     title: `Remove ${member.name}?`,
+    text: 'Press “Remove member” to remove this student from the group.',
     path: `/api/groups/${props.group.groupId}/members/${member.studentId}`,
     method: "DELETE",
     message: "Member removed",

@@ -3,9 +3,12 @@ package com.studybuddy.connection.controller;
 import com.studybuddy.connection.model.MatchRequest;
 import com.studybuddy.connection.model.StudyBuddyConnection;
 import com.studybuddy.connection.service.MatchRequestService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -62,5 +65,11 @@ public class MatchRequestController {
 	public MatchRequest decline(@PathVariable String requestId,
 								@RequestParam String respondentId) {
 		return matchRequestService.decline(requestId, respondentId);
+	}
+
+	@DeleteMapping("/{requestId}")
+	public MatchRequest cancel(@PathVariable String requestId,
+							   @AuthenticationPrincipal Jwt jwt) {
+		return matchRequestService.cancel(requestId, jwt.getClaimAsString("uid"));
 	}
 }

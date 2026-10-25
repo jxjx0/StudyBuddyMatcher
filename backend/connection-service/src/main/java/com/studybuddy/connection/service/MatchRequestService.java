@@ -9,6 +9,7 @@ import com.studybuddy.connection.repository.StudyBuddyConnectionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -76,6 +77,7 @@ public class MatchRequestService {
 		return pendingRequests;
 	}
 
+	@Transactional
 	public MatchRequest send(String senderId, String recipientId, String message) {
 		if (senderId == null || recipientId == null) {
 			throw new IllegalArgumentException("Sender and recipient IDs must not be null");
@@ -87,7 +89,19 @@ public class MatchRequestService {
 		List<StudyBuddyConnection> activeConnections = connectionRepository.findActiveByStudentId(senderId);
 		for (int i = 0; i < activeConnections.size(); i++) {
 			if (activeConnections.get(i).involves(recipientId)) {
-				throw new IllegalStateException("You are already connected with this study buddy");
+				throw new ResponseStatusException(HttpStatus.CONFLICT,
+						"You are already connected with this study buddy");
+			}
+		}
+
+		List<MatchRequest> incoming = matchRequestRepository.findByRecipientId(senderId);
+		for (int i = 0; i < incoming.size(); i++) {
+			MatchRequest req = incoming.get(i);
+			if (recipientId.equals(req.getSenderId()) && req.isPending()) {
+				req.accept();
+				matchRequestRepository.save(req);
+				createConnection(req.getSenderId(), req.getRecipientId());
+				return req;
 			}
 		}
 
@@ -95,15 +109,8 @@ public class MatchRequestService {
 		for (int i = 0; i < outgoing.size(); i++) {
 			MatchRequest req = outgoing.get(i);
 			if (recipientId.equals(req.getRecipientId()) && req.isPending()) {
-				throw new IllegalStateException("A pending match request has already been sent to this student");
-			}
-		}
-
-		List<MatchRequest> incoming = matchRequestRepository.findByRecipientId(senderId);
-		for (int i = 0; i < incoming.size(); i++) {
-			MatchRequest req = incoming.get(i);
-			if (senderId.equals(req.getRecipientId()) && recipientId.equals(req.getSenderId()) && req.isPending()) {
-				throw new IllegalStateException("This student has already sent you a match request. Check your incoming requests!");
+				throw new ResponseStatusException(HttpStatus.CONFLICT,
+						"A pending match request has already been sent to this student");
 			}
 		}
 
@@ -114,9 +121,17 @@ public class MatchRequestService {
 		return matchRequestRepository.save(request);
 	}
 
+	private StudyBuddyConnection createConnection(String studentAId, String studentBId) {
+		StudyBuddyConnection connection = new StudyBuddyConnection();
+		connection.setStudentAId(studentAId);
+		connection.setStudentBId(studentBId);
+		return connectionRepository.save(connection);
+	}
+
 	/**
 	 * Accept a request and open the connection it produces.
 	 */
+	@Transactional
 	public StudyBuddyConnection accept(String requestId, String respondentId) {
 		MatchRequest request = findById(requestId);
 		if (!request.canBeRespondedBy(respondentId)) {
@@ -124,19 +139,27 @@ public class MatchRequestService {
 		}
 		request.accept();
 		matchRequestRepository.save(request);
-
-		StudyBuddyConnection connection = new StudyBuddyConnection();
-		connection.setStudentAId(request.getSenderId());
-		connection.setStudentBId(request.getRecipientId());
-		return connectionRepository.save(connection);
+		return createConnection(request.getSenderId(), request.getRecipientId());
 	}
 
+	@Transactional
 	public MatchRequest decline(String requestId, String respondentId) {
 		MatchRequest request = findById(requestId);
 		if (!request.canBeRespondedBy(respondentId)) {
 			throw new IllegalStateException("Student " + respondentId + " is not authorized to respond to this request");
 		}
 		request.decline();
+		return matchRequestRepository.save(request);
+	}
+
+	@Transactional
+	public MatchRequest cancel(String requestId, String senderId) {
+		MatchRequest request = findById(requestId);
+		if (!request.isPending() || senderId == null || !senderId.equals(request.getSenderId())) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT,
+					"Only the sender can cancel a pending match request");
+		}
+		request.cancel();
 		return matchRequestRepository.save(request);
 	}
 
@@ -155,6 +178,7 @@ public class MatchRequestService {
 		return studentClient.findContactDetails(otherStudentId);
 	}
 
+	@Transactional
 	public void endConnection(String connectionId, String requesterId) {
 		StudyBuddyConnection connection = connectionRepository.findById(connectionId)
 				.orElseThrow(() -> new IllegalArgumentException("Connection not found with id: " + connectionId));
