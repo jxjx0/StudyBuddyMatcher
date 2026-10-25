@@ -23,6 +23,14 @@ for StudyBuddyMatcher. It supplements the project setup instructions in
 - Added request cancellation from the sender's request controls, including the
   Pending Requests tab. A cancelled request no longer appears as pending.
 - Kept contact details private until the connection is accepted.
+- Added real-time chat for active connections using an authenticated
+  WebSocket/STOMP channel and persisted conversation history.
+- Added a Chat action on each active connection. Messages are limited to 2,000
+  characters and the conversation loads its latest 100 saved messages.
+- Restricted chat history, subscriptions, and sending to the two students in
+  that active connection.
+- Configured a dedicated STOMP heartbeat scheduler to help detect stale chat
+  WebSocket connections without colliding with Spring's default scheduler bean.
 
 ### Database setup and cancellation fix
 
@@ -38,6 +46,8 @@ connection:
 2. [002_allow_cancelled_match_requests.sql](./backend/connection-service/migrations/002_allow_cancelled_match_requests.sql)
    updates the `match_requests` status constraint to permit `CANCELLED`.
    This is needed when the table existed before cancellation support.
+3. [003_create_chat_messages.sql](./backend/connection-service/migrations/003_create_chat_messages.sql)
+   creates the persistent chat history table. Apply it before using chat.
 
 The reported HTTP 500 on request cancellation was caused by the live database
 rejecting `CANCELLED` under its existing status constraint. Applying migration
@@ -82,6 +92,12 @@ The following existing test files cover these features and related behavior:
 - [MatchRequestServiceTest.java](./backend/connection-service/src/test/java/com/studybuddy/connection/service/MatchRequestServiceTest.java)
   - Covers reciprocal-request acceptance, duplicate outgoing-request conflict,
     cancellation by the sender, and rejecting cancellation by a non-sender.
+- [ChatServiceTest.java](./backend/connection-service/src/test/java/com/studybuddy/connection/service/ChatServiceTest.java)
+  covers active-connection authorization, message trimming and validation,
+  plus rejecting access after a connection ends.
+- [ConnectionChatDialog.spec.js](./frontend/tests/ui/ConnectionChatDialog.spec.js)
+  covers authenticated WebSocket setup, loading persisted history, sending and
+  receiving messages, error display, and closing the socket.
 - [GroupIntegrationTest.java](./backend/group-service/src/test/java/com/studybuddy/group/GroupIntegrationTest.java)
   - Covers group-request approval and history, request cancellation,
     authorization, and concurrency behavior.
@@ -109,7 +125,8 @@ Run the group-service tests from the `backend` directory:
 The group integration tests require the isolated test database configured by
 the `GROUP_TEST_*` environment variables; see
 [GroupIntegrationTest.java](./backend/group-service/src/test/java/com/studybuddy/group/GroupIntegrationTest.java).
-No test suite or live Supabase database was run while creating this document.
+Automated tests/builds and the live Supabase migration have not been run in this
+environment; the required pnpm and PowerShell/Maven runners were unavailable.
 
 ## Configuration and secrets
 

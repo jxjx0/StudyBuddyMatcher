@@ -5,7 +5,13 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig({
   plugins: [vue()],
   server: {
-    proxy: { '/api': process.env.VITE_API_TARGET || 'http://localhost:8080' },
+    proxy: {
+      '/api': process.env.VITE_API_TARGET || 'http://localhost:8080',
+      '/ws': {
+        target: process.env.VITE_CHAT_WS_TARGET || 'http://localhost:8084',
+        ws: true,
+      },
+    },
   },
   resolve: {
     alias: {

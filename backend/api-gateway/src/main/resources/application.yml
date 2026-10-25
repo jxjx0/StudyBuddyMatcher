@@ -11,6 +11,10 @@ spring:
       server:
         webmvc:
           routes:
+            - id: connection-chat-websocket
+              uri: ${CONNECTION_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/ws
             - id: user-service
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:

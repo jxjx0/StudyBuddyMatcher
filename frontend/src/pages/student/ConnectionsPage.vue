@@ -1,7 +1,16 @@
 <script setup>
 import { onMounted, ref } from "vue";
-import { CalendarDays, Check, Mail, Phone, UserRound, X } from "lucide-vue-next";
+import {
+  CalendarDays,
+  Check,
+  Mail,
+  MessageCircle,
+  Phone,
+  UserRound,
+  X,
+} from "lucide-vue-next";
 import { useConnections } from "../../composables/useConnections";
+import ConnectionChatDialog from "../../components/ConnectionChatDialog.vue";
 
 const {
   incomingRequests,
@@ -20,6 +29,7 @@ const {
 
 const connectionTab = ref("active");
 const requestTab = ref("incoming");
+const chatConnection = ref(null);
 
 function initials(name) {
   return (name || "Study buddy")
@@ -133,13 +143,23 @@ onMounted(async () => {
                 <Phone :size="17" aria-hidden="true" /> Phone not provided
               </p>
             </div>
-            <button
-              class="secondary-button end-connection"
-              @click="endStudyConnection(connection.connectionId)"
-            >
-              <X :size="16" aria-hidden="true" />
-              End connection
-            </button>
+            <div class="connection-actions">
+              <button
+                class="primary-button chat-connection"
+                :aria-label="`Chat with ${connection.partnerName || 'study buddy'}`"
+                @click="chatConnection = connection"
+              >
+                <MessageCircle :size="16" aria-hidden="true" />
+                Chat
+              </button>
+              <button
+                class="secondary-button end-connection"
+                @click="endStudyConnection(connection.connectionId)"
+              >
+                <X :size="16" aria-hidden="true" />
+                End connection
+              </button>
+            </div>
           </article>
         </div>
       </section>
@@ -259,6 +279,11 @@ onMounted(async () => {
           </div>
         </div>
       </section>
+      <ConnectionChatDialog
+        v-if="chatConnection"
+        :connection="chatConnection"
+        @close="chatConnection = null"
+      />
     </template>
   </section>
 </template>
@@ -325,6 +350,21 @@ onMounted(async () => {
   grid-template-columns: minmax(200px, 0.85fr) minmax(240px, 1.15fr) auto;
 }
 
+.connection-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.connection-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 0;
+}
+
 .request-card {
   grid-template-columns: minmax(0, 1fr) auto;
 }
@@ -386,7 +426,6 @@ onMounted(async () => {
 }
 
 .end-connection {
-  justify-self: end;
   white-space: nowrap;
 }
 
@@ -489,6 +528,12 @@ onMounted(async () => {
     grid-column: 2;
     justify-self: start;
   }
+
+  .connection-actions {
+    grid-column: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 640px) {
@@ -520,11 +565,14 @@ onMounted(async () => {
     flex-direction: column;
   }
 
-  .end-connection,
+  .connection-actions,
   .request-actions {
     grid-column: auto;
     justify-self: stretch;
-    justify-content: flex-start;
+  }
+
+  .connection-actions button {
+    flex: 1 1 140px;
   }
 }
 </style>

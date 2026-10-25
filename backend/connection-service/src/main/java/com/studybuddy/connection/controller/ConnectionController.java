@@ -1,7 +1,9 @@
 package com.studybuddy.connection.controller;
 
 import com.studybuddy.connection.dto.StudentContactDto;
+import com.studybuddy.connection.dto.ChatMessage;
 import com.studybuddy.connection.model.StudyBuddyConnection;
+import com.studybuddy.connection.service.ChatService;
 import com.studybuddy.connection.service.MatchRequestService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -23,9 +25,11 @@ import java.util.List;
 public class ConnectionController {
 
 	private final MatchRequestService matchRequestService;
+	private final ChatService chatService;
 
-	public ConnectionController(MatchRequestService matchRequestService) {
+	public ConnectionController(MatchRequestService matchRequestService, ChatService chatService) {
 		this.matchRequestService = matchRequestService;
+		this.chatService = chatService;
 	}
 
 	@GetMapping
@@ -38,6 +42,12 @@ public class ConnectionController {
 												@AuthenticationPrincipal Jwt jwt) {
 		return matchRequestService.findActiveConnectionContact(
 				connectionId, jwt.getClaimAsString("uid"));
+	}
+
+	@GetMapping("/{connectionId}/messages")
+	public List<ChatMessage> findMessages(@PathVariable String connectionId,
+										  @AuthenticationPrincipal Jwt jwt) {
+		return chatService.history(connectionId, jwt.getClaimAsString("uid"));
 	}
 
 	@DeleteMapping("/{connectionId}")
