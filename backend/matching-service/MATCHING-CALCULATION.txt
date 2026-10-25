@@ -55,8 +55,9 @@ Availability:
 
 Study mode:
   IN_PERSON matches IN_PERSON; ONLINE matches ONLINE. EITHER matches either
-  specific mode. A missing (null) mode is also treated as compatible. The
-  compatibility score is either 100% or 0%.
+  specific mode. A missing (null) mode on either side scores 0%, though it
+  still passes the meeting-mode filter. The compatibility score is either
+  100% or 0%.
 
 Study goal:
   Uses the distinct goals selected by both students.
@@ -65,8 +66,8 @@ Study goal:
 
 Group size:
   ONE_TO_ONE matches ONE_TO_ONE; SMALL_GROUP matches SMALL_GROUP. EITHER matches
-  either specific preference. A missing (null) preference is treated as
-  compatible. The compatibility score is either 100% or 0%.
+  either specific preference. A missing (null) preference on either side
+  scores 0%. The compatibility score is either 100% or 0%.
 
 JAVA CLASS FLOW
 ---------------

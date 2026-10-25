@@ -123,9 +123,6 @@ onScopeDispose(() => controller?.abort());
         Contact details remain private until your connection is accepted.
       </p>
       <div class="form-actions">
-        <RouterLink class="secondary-button" to="/student/groups"
-          >Explore study groups</RouterLink
-        >
         <button
           v-if="profileConnectionStatus === 'Connect'"
           class="primary-button"
