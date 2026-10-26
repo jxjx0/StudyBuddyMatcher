@@ -203,6 +203,15 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
     incomingRequests.value = loadedIncoming.filter(Boolean);
     outgoingRequests.value = loadedOutgoing.filter(Boolean);
     activeConnections.value = loadedConnections.filter(Boolean);
+    const incomingCount = incomingRequests.value.length;
+    if (incomingCount > lastAcknowledgedPendingCount) {
+      unreadConnectionUpdates.value = incomingCount - lastAcknowledgedPendingCount;
+    } else {
+      unreadConnectionUpdates.value = 0;
+      if (incomingCount < lastAcknowledgedPendingCount) {
+        lastAcknowledgedPendingCount = incomingCount;
+      }
+    }
     hasLoadedOnce.value = true;
     cachedUserId = currentStudentId;
 

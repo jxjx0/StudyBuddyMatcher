@@ -12,6 +12,7 @@ const {
   error,
   loadConnectionsAndRequests,
   markConnectionUpdatesRead,
+  unreadConnectionUpdates,
   acceptMatchRequest,
   declineMatchRequest,
   endStudyConnection,
@@ -31,6 +32,13 @@ function initials(name) {
     .toUpperCase();
 }
 
+function selectTab(tab) {
+  connectionTab.value = tab;
+  if (tab === 'pending') {
+    markConnectionUpdatesRead();
+  }
+}
+
 function viewProfile(partnerId) {
   if (partnerId) {
     router.push({ name: "student-public-profile", query: { id: partnerId, from: "connections" } });
@@ -38,7 +46,8 @@ function viewProfile(partnerId) {
 }
 
 onMounted(async () => {
-  if (await loadConnectionsAndRequests()) markConnectionUpdatesRead();
+  await loadConnectionsAndRequests();
+  if (connectionTab.value === 'pending') markConnectionUpdatesRead();
 });
 </script>
 
@@ -65,7 +74,7 @@ onMounted(async () => {
           aria-controls="active-connections-panel"
           :aria-selected="connectionTab === 'active'"
           :aria-pressed="connectionTab === 'active'"
-          @click="connectionTab = 'active'"
+          @click="selectTab('active')"
         >
           Active connections <span class="tab-count">{{ activeConnections.length }}</span>
         </button>
@@ -76,10 +85,18 @@ onMounted(async () => {
           aria-controls="pending-requests-panel"
           :aria-selected="connectionTab === 'pending'"
           :aria-pressed="connectionTab === 'pending'"
-          @click="connectionTab = 'pending'"
+          @click="selectTab('pending')"
         >
           Pending requests
-          <span class="tab-count">{{ incomingRequests.length + outgoingRequests.length }}</span>
+          <span
+            v-if="unreadConnectionUpdates"
+            class="tab-notification-badge"
+            role="status"
+            :aria-label="`${unreadConnectionUpdates} unread pending requests`"
+          >
+            {{ unreadConnectionUpdates > 9 ? '9+' : unreadConnectionUpdates }}
+          </span>
+          <span v-else class="tab-count">{{ incomingRequests.length + outgoingRequests.length }}</span>
         </button>
       </div>
 
@@ -295,6 +312,21 @@ onMounted(async () => {
   border-color: #dba89a;
   background: var(--soft);
   color: #963e2c;
+}
+
+
+.tab-notification-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .tab-count {
