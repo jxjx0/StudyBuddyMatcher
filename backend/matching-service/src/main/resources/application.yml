@@ -18,6 +18,10 @@ spring:
     init:
       mode: always
 
+app:
+  auth:
+    jwt-secret: ${JWT_SECRET:}
+
 # Other services this one calls. Kept in configuration rather than hard-coded
 # in Java, so they can be repointed without a rebuild.
 services:

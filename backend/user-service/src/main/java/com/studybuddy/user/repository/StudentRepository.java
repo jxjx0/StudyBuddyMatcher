@@ -27,12 +27,9 @@ import java.util.UUID;
 /**
  * PostgreSQL storage for student profiles in the students table.
  *
- * For now profiles are also kept in user_accounts.profile_data by
- * UserRepository, which remains
- * the source the app reads from. The account itself (email, password, status)
- * lives only in
- * user_accounts, so a student must be saved there first: students.user_id
- * references it.
+ * Student pages and matching read this table. UserRepository also mirrors
+ * profile fields in user_accounts.profile_data for account administration;
+ * writes to either store keep both representations synchronized.
  */
 
 // StudentRepository calls from students table
@@ -57,6 +54,16 @@ public class StudentRepository {
 		} catch (DuplicateKeyException e) {
 			throw new IllegalArgumentException("A student profile already exists for this user", e);
 		}
+	}
+
+	/** Inserts a missing profile without failing if another request created it concurrently. */
+	public boolean saveIfAbsent(Student student) {
+		return jdbc.update("""
+				INSERT INTO students(name, school, programme, year_of_study, contact_number, current_courses,
+				 courses_for_studying, meeting_mode, weekly_availability, group_size_preference, study_goals, user_id)
+				VALUES (?, ?, ?, ?, ?, CAST(? AS uuid[]), CAST(? AS uuid[]), ?, CAST(? AS jsonb), ?, CAST(? AS text[]), CAST(? AS uuid))
+				ON CONFLICT (user_id) DO NOTHING
+				""", values(student)) > 0;
 	}
 
 	/** Replaces an existing profile; returns false if this user has none yet. */

@@ -22,6 +22,8 @@ const accountDraft = ref({
   role: "Student",
   status: "Active",
   school: smuSchools[0],
+  programme: "",
+  yearOfStudy: 1,
 });
 const visibleAccounts = computed(() =>
   accounts.value.filter(
@@ -45,21 +47,28 @@ function openAccountForm(account = null) {
         role: "Student",
         status: "Active",
         school: smuSchools[0],
+        programme: "",
+        yearOfStudy: 1,
       };
   showAccountForm.value = true;
 }
 async function loadAccounts() {
-  accounts.value = (await api("/api/admin/accounts")).map((account) => ({
-    id: account.userId,
-    name: account.name,
-    email: account.email,
-    role: account.role === "ADMIN" ? "Admin" : "Student",
-    status: account.accountStatus === "ACTIVE" ? "Active" : "Suspended",
-    school: account.school || "—",
-    currentCourseCount: account.currentCourseCount,
-    studyGoalCount: account.studyGoalCount,
-    availabilitySlotCount: account.availabilitySlotCount,
-  }));
+  accounts.value = (await api("/api/admin/accounts")).map((account) => {
+    const role = account.role === "ADMIN" ? "Admin" : "Student";
+    return {
+      id: account.userId,
+      name: account.name,
+      email: account.email,
+      role,
+      status: account.accountStatus === "ACTIVE" ? "Active" : "Suspended",
+      school: account.school || (role === "Student" ? "Undeclared" : "—"),
+      programme: account.programme || "Undeclared",
+      yearOfStudy: account.yearOfStudy || 1,
+      currentCourseCount: account.currentCourseCount,
+      studyGoalCount: account.studyGoalCount,
+      availabilitySlotCount: account.availabilitySlotCount,
+    };
+  });
 }
 async function loadUsageSummary() {
   usageSummary.value = await api("/api/admin/usage");
@@ -74,7 +83,13 @@ async function saveAccount() {
     const details = {
       name: draft.name.trim(),
       email: draft.email.trim(),
-      school: draft.school,
+      ...(draft.role === "Student"
+        ? {
+            school: draft.school,
+            programme: draft.programme.trim(),
+            yearOfStudy: Number(draft.yearOfStudy),
+          }
+        : {}),
     };
     if (editingAccount.value) {
       const path = `/api/admin/accounts/${editingAccount.value.id}`;
