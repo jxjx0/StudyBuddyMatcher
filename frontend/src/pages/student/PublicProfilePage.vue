@@ -1,16 +1,22 @@
 <script setup>
 import { computed, ref, watch, onMounted, onScopeDispose } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import { Check, X } from "lucide-vue-next";
 import { useAppState } from "../../composables/useAppState";
 import { useConnections } from "../../composables/useConnections";
 const { loadPublicProfile, user } = useAppState();
 const {
+  incomingRequests,
   outgoingRequests,
   activeConnections,
   sendMatchRequest,
+  acceptMatchRequest,
+  declineMatchRequest,
   loadConnectionsAndRequests,
 } = useConnections();
 const route = useRoute();
+const router = useRouter();
+const respondingAction = ref(null); // 'accept' | 'decline' | null
 const loading = ref(false);
 const error = ref("");
 const selectedProfile = ref(null);
@@ -37,6 +43,35 @@ const connectionStatus = computed(() => {
   }
   return "Connect";
 });
+
+
+const incomingRequest = computed(() => {
+  const profileId = selectedProfile.value?.id;
+  if (!profileId) return null;
+  return incomingRequests.value.find((req) => req.senderId === profileId);
+});
+
+async function handleAccept() {
+  if (!incomingRequest.value || respondingAction.value) return;
+  respondingAction.value = 'accept';
+  try {
+    await acceptMatchRequest(incomingRequest.value.requestId);
+    router.push({ path: "/student/connections" });
+  } finally {
+    respondingAction.value = null;
+  }
+}
+
+async function handleDecline() {
+  if (!incomingRequest.value || respondingAction.value) return;
+  respondingAction.value = 'decline';
+  try {
+    await declineMatchRequest(incomingRequest.value.requestId);
+    router.push({ path: "/student/connections" });
+  } finally {
+    respondingAction.value = null;
+  }
+}
 
 async function handleConnect() {
   if (!selectedProfile.value?.id || connectionStatus.value !== "Connect" || sending.value) {
@@ -99,7 +134,10 @@ onScopeDispose(() => controller?.abort());
       <h1>Public study profile</h1>
       <p>Get to know a student’s courses and study preferences.</p>
     </header>
-    <p v-if="loading" role="status">Loading profile…</p>
+    <div v-if="loading" class="loading-state" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>Loading profile…</p>
+    </div>
     <div v-else-if="error" class="error-message" role="alert">
       <p>{{ error }}</p>
       <button class="secondary-button" @click="load">Try again</button>
@@ -144,8 +182,26 @@ onScopeDispose(() => controller?.abort());
         Contact details remain private until your connection is accepted.
       </p>
       <div class="form-actions">
+        <template v-if="incomingRequest">
+          <button
+            class="primary-button"
+            :disabled="Boolean(respondingAction)"
+            @click="handleAccept"
+          >
+            <Check :size="16" aria-hidden="true" />
+            {{ respondingAction === 'accept' ? "Accepting…" : "Accept request" }}
+          </button>
+          <button
+            class="secondary-button"
+            :disabled="Boolean(respondingAction)"
+            @click="handleDecline"
+          >
+            <X :size="16" aria-hidden="true" />
+            {{ respondingAction === 'decline' ? "Declining…" : "Decline" }}
+          </button>
+        </template>
         <button
-          v-if="connectionStatus !== 'Self'"
+          v-else-if="connectionStatus !== 'Self'"
           class="primary-button"
           :disabled="sending || connectionStatus !== 'Connect'"
           @click="handleConnect"
@@ -156,3 +212,33 @@ onScopeDispose(() => controller?.abort());
     </section>
   </section>
 </template>
+
+<style scoped>
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.loading-state p {
+  margin: 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>

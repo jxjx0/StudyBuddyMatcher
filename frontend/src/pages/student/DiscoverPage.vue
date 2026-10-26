@@ -18,9 +18,11 @@ const {
   user,
 } = useAppState();
 const {
+  incomingRequests,
   outgoingRequests,
   activeConnections,
   sendMatchRequest,
+  loadConnectionsAndRequests,
 } = useConnections();
 const router = useRouter();
 
@@ -158,6 +160,10 @@ function requestStatus(studentId) {
   )
     return "Connected";
   if (
+    incomingRequests.value.some((request) => request.senderId === studentId)
+  )
+    return "Respond to Request";
+  if (
     sentRequestIds.value.has(studentId) ||
     outgoingRequests.value.some((request) => request.recipientId === studentId)
   )
@@ -165,7 +171,12 @@ function requestStatus(studentId) {
   return "Connect";
 }
 async function connect(studentId) {
-  if (sendingRequestIds.value.has(studentId) || requestStatus(studentId) !== "Connect")
+  const status = requestStatus(studentId);
+  if (status === "Respond to Request") {
+    viewProfile(studentId);
+    return;
+  }
+  if (sendingRequestIds.value.has(studentId) || status !== "Connect")
     return;
   sendingRequestIds.value = new Set(sendingRequestIds.value).add(studentId);
   try {
@@ -180,6 +191,7 @@ async function connect(studentId) {
 onMounted(() => {
   loadMatches();
   refresh();
+  void loadConnectionsAndRequests({ silent: true });
 });
 onBeforeRouteLeave(() => {
   query.value = "";
@@ -328,16 +340,12 @@ onBeforeRouteLeave(() => {
       </div>
     </div>
 
-    <div class="results-heading">
+    <div v-if="!shownLoading" class="results-heading">
       <p role="status">
         {{
-          shownLoading
-            ? tab === "matches"
-              ? "Finding your best matches…"
-              : "Loading students…"
-            : tab === "matches"
-              ? `${shownStudents.length} matches found`
-              : `${shownStudents.length} students found`
+          tab === "matches"
+            ? `${shownStudents.length} matches found`
+            : `${shownStudents.length} students found`
         }}
       </p>
       <button class="text-button" @click="resetFilters">Reset filters</button>
@@ -346,7 +354,11 @@ onBeforeRouteLeave(() => {
       <p>{{ shownError }}</p>
       <button class="secondary-button" @click="retry">Try again</button>
     </div>
-    <template v-else-if="!shownLoading">
+    <div v-else-if="shownLoading" class="loading-state" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>{{ tab === 'matches' ? 'Finding your best matches…' : 'Loading students…' }}</p>
+    </div>
+    <template v-else>
       <div v-if="!pagedStudents.length" class="empty-state">
         <Search :size="30" />
         <template v-if="tab === 'matches'">
@@ -397,26 +409,36 @@ onBeforeRouteLeave(() => {
           </div>
           <div class="form-actions">
             <button
-              class="secondary-button"
-              :aria-label="`View ${student.name}'s public profile`"
+              v-if="requestStatus(student.id) === 'Respond to Request'"
+              class="primary-button"
+              :aria-label="`Respond to request from ${student.name}`"
               @click="viewProfile(student.id)"
             >
-              View profile
+              Respond to request
             </button>
-            <button
-              class="primary-button"
-              :disabled="
-                sendingRequestIds.has(student.id) ||
-                requestStatus(student.id) !== 'Connect'
-              "
-              @click="connect(student.id)"
-            >
-              {{
-                sendingRequestIds.has(student.id)
-                  ? "Sending…"
-                  : requestStatus(student.id)
-              }}
-            </button>
+            <template v-else>
+              <button
+                class="secondary-button"
+                :aria-label="`View ${student.name}'s public profile`"
+                @click="viewProfile(student.id)"
+              >
+                View profile
+              </button>
+              <button
+                class="primary-button"
+                :disabled="
+                  sendingRequestIds.has(student.id) ||
+                  requestStatus(student.id) !== 'Connect'
+                "
+                @click="connect(student.id)"
+              >
+                {{
+                  sendingRequestIds.has(student.id)
+                    ? "Sending…"
+                    : requestStatus(student.id)
+                }}
+              </button>
+            </template>
           </div>
         </article>
       </div>
@@ -439,3 +461,33 @@ onBeforeRouteLeave(() => {
     </template>
   </section>
 </template>
+
+<style scoped>
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.loading-state p {
+  margin: 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>
