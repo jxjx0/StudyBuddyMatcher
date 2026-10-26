@@ -59,17 +59,37 @@ public class GroupJoinRequestRepository {
         UUID.fromString(studentId));
   }
 
-  public Optional<GroupJoinRequest> findPendingByGroupAndStudent(String groupId, String studentId) {
+  /** Caller holds the group lock before locking the request. */
+  public Optional<GroupJoinRequest> lockPendingByGroupAndStudent(String groupId, String studentId) {
     List<GroupJoinRequest> requests =
         jdbc.query(
             """
                 SELECT * FROM group_join_requests
                 WHERE group_id=? AND student_id=? AND status='PENDING'
+                FOR UPDATE
                 """,
             this::mapRequest,
             UUID.fromString(groupId),
             UUID.fromString(studentId));
     return requests.stream().findFirst();
+  }
+
+  /** The existing partial unique index checks for a duplicate in the insert itself. */
+  public boolean insertPending(GroupJoinRequest request) {
+    if (!request.isPending()) {
+      throw new IllegalArgumentException("Only pending requests can be created");
+    }
+    return jdbc.update(
+            """
+            INSERT INTO group_join_requests(group_join_request_id,student_id,group_id,status,created_at)
+            VALUES (?,?,?,'PENDING',?)
+            ON CONFLICT (group_id,student_id) WHERE status='PENDING' DO NOTHING
+            """,
+            UUID.fromString(request.getGroupJoinRequestId()),
+            UUID.fromString(request.getStudentId()),
+            UUID.fromString(request.getGroupId()),
+            Timestamp.from(request.getCreatedAt()))
+        == 1;
   }
 
   private GroupJoinRequest mapRequest(ResultSet resultSet, int rowNumber) throws SQLException {
