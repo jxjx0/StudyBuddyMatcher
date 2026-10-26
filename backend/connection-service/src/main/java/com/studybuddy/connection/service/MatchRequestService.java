@@ -54,7 +54,14 @@ public class MatchRequestService {
 			MatchRequest req = recipientRequests.get(i);
 
 			if (req.isPending()) {
-				pendingRequests.add(req);
+				// Validate that sender still exists; if deleted, auto-decline orphan request
+				try {
+					studentClient.findStudent(req.getSenderId());
+					pendingRequests.add(req);
+				} catch (Exception e) {
+					req.decline();
+					matchRequestRepository.save(req);
+				}
 			}
 		}
 		return pendingRequests;
@@ -70,7 +77,14 @@ public class MatchRequestService {
 			MatchRequest req = senderRequests.get(i);
 
 			if (req.isPending()) {
-				pendingRequests.add(req);
+				// Validate that recipient still exists; if deleted, auto-decline orphan request
+				try {
+					studentClient.findStudent(req.getRecipientId());
+					pendingRequests.add(req);
+				} catch (Exception e) {
+					req.decline();
+					matchRequestRepository.save(req);
+				}
 			}
 		}
 		return pendingRequests;
@@ -78,7 +92,7 @@ public class MatchRequestService {
 
 	public int countPendingFor(String studentId) {
 		if (studentId == null) return 0;
-		return matchRequestRepository.countPendingForRecipient(studentId);
+		return findPendingFor(studentId).size();
 	}
 
 	public MatchRequest send(String senderId, String recipientId, String message) {

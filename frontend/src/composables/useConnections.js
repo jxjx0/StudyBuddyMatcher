@@ -34,6 +34,7 @@ const error = ref("");
 const unreadConnectionUpdates = ref(0);
 const hasLoadedOnce = ref(false);
 let cachedUserId = null;
+let lastAcknowledgedPendingCount = 0;
 
 function resetConnectionsCache() {
   incomingRequests.value = [];
@@ -44,6 +45,7 @@ function resetConnectionsCache() {
   unreadConnectionUpdates.value = 0;
   hasLoadedOnce.value = false;
   cachedUserId = null;
+  lastAcknowledgedPendingCount = 0;
   studentProfileCache.clear();
 }
 
@@ -58,6 +60,11 @@ watch(
 );
 
 function markConnectionUpdatesRead() {
+  lastAcknowledgedPendingCount = Math.max(
+    incomingRequests.value.length,
+    unreadConnectionUpdates.value,
+    lastAcknowledgedPendingCount,
+  );
   unreadConnectionUpdates.value = 0;
 }
 
@@ -67,7 +74,16 @@ async function checkForConnectionUpdates() {
   try {
     const res = await api(`/api/match-requests/pending/count`);
     if (user.value?.userId !== studentId) return false;
-    unreadConnectionUpdates.value = res.count ?? 0;
+    const serverCount = res.count ?? 0;
+    // Only show unread badge if new pending requests have arrived beyond what was acknowledged
+    if (serverCount > lastAcknowledgedPendingCount) {
+      unreadConnectionUpdates.value = serverCount - lastAcknowledgedPendingCount;
+    } else {
+      unreadConnectionUpdates.value = 0;
+      if (serverCount < lastAcknowledgedPendingCount) {
+        lastAcknowledgedPendingCount = serverCount;
+      }
+    }
     return true;
   } catch (problem) {
     console.error("Could not check for connection updates.", problem);
@@ -104,10 +120,19 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
             .filter((req) => req && req.requestId)
             .map(async (request) => {
               try {
-                const sender = await api(`/api/students/${request.senderId}`);
+                const sender = await fetchStudentOrNull(request.senderId);
+                if (sender === null) {
+                  // The student who sent this request has deleted their account.
+                  // Auto-decline/clean up the orphaned match request so it doesn't linger.
+                  void api(
+                    `/api/match-requests/${request.requestId}/decline?respondentId=${encodeURIComponent(currentStudentId)}`,
+                    { method: "POST" },
+                  ).catch(() => {});
+                  return null;
+                }
                 return { ...request, senderName: sender.name };
               } catch {
-                return null;
+                return { ...request, senderName: "Former Student" };
               }
             }),
         ),
@@ -116,10 +141,13 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
             .filter((req) => req && req.requestId)
             .map(async (request) => {
               try {
-                const recipient = await api(`/api/students/${request.recipientId}`);
+                const recipient = await fetchStudentOrNull(request.recipientId);
+                if (recipient === null) {
+                  return null;
+                }
                 return { ...request, recipientName: recipient.name };
               } catch {
-                return null;
+                return { ...request, recipientName: "Former Student" };
               }
             }),
         ),
@@ -175,7 +203,6 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
     incomingRequests.value = loadedIncoming.filter(Boolean);
     outgoingRequests.value = loadedOutgoing.filter(Boolean);
     activeConnections.value = loadedConnections.filter(Boolean);
-    unreadConnectionUpdates.value = incomingRequests.value.length;
     hasLoadedOnce.value = true;
     cachedUserId = currentStudentId;
 
