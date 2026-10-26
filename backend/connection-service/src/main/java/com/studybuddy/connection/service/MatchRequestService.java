@@ -42,7 +42,8 @@ public class MatchRequestService {
 
 	public MatchRequest findById(String requestId) {
 		return matchRequestRepository.findById(requestId)
-				.orElseThrow(() -> new IllegalArgumentException("MatchRequest not found with id: " + requestId));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+						"MatchRequest not found with id: " + requestId));
 	}
 
 	public List<MatchRequest> findPendingFor(String studentId) {
@@ -102,7 +103,7 @@ public class MatchRequestService {
 			throw new IllegalArgumentException("Sender and recipient IDs must not be null");
 		}
 		if (senderId.equals(recipientId)) {
-			throw new IllegalArgumentException("Cannot send match request to yourself");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot send match request to yourself");
 		}
 
 		List<StudyBuddyConnection> activeConnections = connectionRepository.findActiveByStudentId(senderId);
