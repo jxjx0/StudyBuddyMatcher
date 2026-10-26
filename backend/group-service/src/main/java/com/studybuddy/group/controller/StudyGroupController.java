@@ -41,6 +41,11 @@ public class StudyGroupController {
     return groupService.findById(groupId.toString(), currentStudentId(jwt));
   }
 
+  @GetMapping("/{id}/details")
+  public GroupDetails details(@PathVariable("id") UUID groupId, @AuthenticationPrincipal Jwt jwt) {
+    return groupService.details(groupId.toString(), currentStudentId(jwt));
+  }
+
   @PostMapping
   public ResponseEntity<GroupView> create(
       @RequestBody @Valid GroupInput input, @AuthenticationPrincipal Jwt jwt) {

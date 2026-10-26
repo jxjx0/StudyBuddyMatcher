@@ -6,6 +6,7 @@ const props = defineProps({
   group: Object,
   requests: Array,
   busy: Boolean,
+  refreshing: Boolean,
   error: String,
   notice: String,
 });
@@ -99,6 +100,9 @@ function confirm() {
     @close="emit('close')"
   >
     <template v-if="group">
+      <p v-if="refreshing" class="feature-note" role="status"
+        >Updating group…</p
+      >
       <p
         v-if="notice"
         ref="noticePanel"
@@ -142,7 +146,7 @@ function confirm() {
       <button
         v-if="group.canRequest"
         class="primary-button"
-        :disabled="busy"
+        :disabled="busy || refreshing"
         @click="requestToJoin"
       >
         {{ busy ? "Sending…" : "Request to join" }}
@@ -150,7 +154,7 @@ function confirm() {
       <button
         v-else-if="group.myRequestStatus === 'PENDING'"
         class="cancel-button"
-        :disabled="busy"
+        :disabled="busy || refreshing"
         @click="cancelRequest"
       >
         {{ busy ? "Cancelling…" : "Cancel request" }}
@@ -178,7 +182,7 @@ function confirm() {
                 member.studentId !== group.leaderId
               "
               class="text-button danger"
-              :disabled="busy"
+              :disabled="busy || refreshing"
               :aria-label="`Remove ${member.name}`"
               @click="confirmRemove(member)"
             >
@@ -187,7 +191,7 @@ function confirm() {
           </li>
         </ul>
       </section>
-      <template v-if="group.isLeader"
+      <template v-if="group.isLeader && !refreshing"
         ><section class="form-section">
           <h3>Pending requests ({{ pendingRequests.length }})</h3>
           <div
@@ -256,14 +260,14 @@ function confirm() {
         <template v-if="group.isLeader && group.status === 'ACTIVE'">
           <button
             class="secondary-button"
-            :disabled="busy"
+            :disabled="busy || refreshing"
             @click="emit('edit', group)"
           >
             Edit group
           </button>
           <button
             class="text-button danger end-group-action"
-            :disabled="busy"
+            :disabled="busy || refreshing"
             @click="confirmClose"
           >
             End group…

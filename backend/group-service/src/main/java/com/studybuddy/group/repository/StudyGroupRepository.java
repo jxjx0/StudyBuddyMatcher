@@ -9,8 +9,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 @Repository
@@ -41,25 +39,46 @@ public class StudyGroupRepository {
         });
   }
 
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public Optional<StudyGroup> findById(String groupId) {
-    return findGroup(groupId, false);
+    // A single statement gives a consistent group/member snapshot without a read transaction.
+    return jdbc
+        .query(
+            """
+            SELECT g.*, ARRAY(
+                SELECT m.student_id::text FROM study_group_members m
+                WHERE m.group_id = g.group_id
+                ORDER BY m.joined_at, m.student_id
+            ) AS member_ids
+            FROM study_groups g WHERE g.group_id=?
+            """,
+            (resultSet, rowNumber) -> {
+              String[] memberIds = (String[]) resultSet.getArray("member_ids").getArray();
+              return mapGroup(resultSet, List.of(memberIds));
+            },
+            UUID.fromString(groupId))
+        .stream()
+        .findFirst();
   }
 
   public Optional<StudyGroup> lockById(String groupId) {
-    return findGroup(groupId, true);
-  }
-
-  private Optional<StudyGroup> findGroup(String groupId, boolean lockForUpdate) {
-    String sql = "SELECT * FROM study_groups WHERE group_id=?";
-    if (lockForUpdate) {
-      sql += " FOR UPDATE";
-    }
-    List<StudyGroup> groups = jdbc.query(sql, this::mapGroupWithMembers, UUID.fromString(groupId));
+    List<StudyGroup> groups =
+        jdbc.query(
+            "SELECT * FROM study_groups WHERE group_id=? FOR UPDATE",
+            this::mapGroupWithMembers,
+            UUID.fromString(groupId));
     if (groups.isEmpty()) {
       return Optional.empty();
     }
     return Optional.of(groups.getFirst());
+  }
+
+  /** Cancellation needs the group lock, but does not read or change its members. */
+  public boolean lockExistsById(String groupId) {
+    return !jdbc.queryForList(
+            "SELECT group_id FROM study_groups WHERE group_id=? FOR UPDATE",
+            UUID.class,
+            UUID.fromString(groupId))
+        .isEmpty();
   }
 
   private StudyGroup mapGroupWithMembers(ResultSet resultSet, int rowNumber) throws SQLException {
