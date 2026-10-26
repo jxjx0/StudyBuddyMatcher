@@ -92,30 +92,6 @@ async function checkForConnectionUpdates() {
   }
 }
 
-function connectionStatus(studentId) {
-  if (
-    activeConnections.value.some(
-      (connection) =>
-        connection.studentAId === studentId ||
-        connection.studentBId === studentId,
-    )
-  )
-    return "Connected";
-  if (
-    incomingRequests.value.some(
-      (request) => request.senderId === studentId && request.status === "PENDING",
-    )
-  )
-    return "Accept request";
-  if (
-    outgoingRequests.value.some(
-      (request) => request.recipientId === studentId && request.status === "PENDING",
-    )
-  )
-    return "Request Sent";
-  return "Connect";
-}
-
 async function loadConnectionsAndRequests({ silent = false } = {}) {
   const currentStudentId = user.value?.userId;
   if (!currentStudentId) return false;
@@ -283,17 +259,6 @@ async function sendMatchRequest(recipientId, message = "") {
   }
 }
 
-async function connectToStudent(studentId, message = "") {
-  const incoming = incomingRequests.value.find(
-    (request) => request.senderId === studentId && request.status === "PENDING",
-  );
-  if (incoming) {
-    return acceptMatchRequest(incoming.requestId);
-  }
-  if (connectionStatus(studentId) !== "Connect") return false;
-  return sendMatchRequest(studentId, message);
-}
-
 async function cancelMatchRequest(requestId) {
   if (cancellingRequestIds.value.has(requestId)) return false;
   cancellingRequestIds.value = new Set(cancellingRequestIds.value).add(requestId);
@@ -392,8 +357,6 @@ export function useConnections() {
     checkForConnectionUpdates,
     markConnectionUpdatesRead,
     sendMatchRequest,
-    connectToStudent,
-    connectionStatus,
     cancelMatchRequest,
     cancelMatchRequestFor,
     acceptMatchRequest,
