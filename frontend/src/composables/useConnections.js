@@ -96,7 +96,7 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
   if (!currentStudentId) return false;
 
   // If the user changed, reset before loading
-  if (cachedUserId !== currentStudentId) {
+  if (cachedUserId && cachedUserId !== currentStudentId) {
     resetConnectionsCache();
   }
 

@@ -45,6 +45,48 @@ function viewProfile(partnerId) {
   }
 }
 
+const endingConnectionIds = ref(new Set());
+async function handleEndConnection(connectionId) {
+  if (endingConnectionIds.value.has(connectionId)) return;
+  endingConnectionIds.value = new Set(endingConnectionIds.value).add(connectionId);
+  try {
+    await endStudyConnection(connectionId);
+  } finally {
+    const updated = new Set(endingConnectionIds.value);
+    updated.delete(connectionId);
+    endingConnectionIds.value = updated;
+  }
+}
+
+const processingRequestIds = ref(new Map());
+async function handleAccept(requestId) {
+  if (processingRequestIds.value.has(requestId)) return;
+  const updated = new Map(processingRequestIds.value);
+  updated.set(requestId, 'accept');
+  processingRequestIds.value = updated;
+  try {
+    await acceptMatchRequest(requestId);
+  } finally {
+    const next = new Map(processingRequestIds.value);
+    next.delete(requestId);
+    processingRequestIds.value = next;
+  }
+}
+
+async function handleDecline(requestId) {
+  if (processingRequestIds.value.has(requestId)) return;
+  const updated = new Map(processingRequestIds.value);
+  updated.set(requestId, 'decline');
+  processingRequestIds.value = updated;
+  try {
+    await declineMatchRequest(requestId);
+  } finally {
+    const next = new Map(processingRequestIds.value);
+    next.delete(requestId);
+    processingRequestIds.value = next;
+  }
+}
+
 onMounted(async () => {
   await loadConnectionsAndRequests();
   if (connectionTab.value === 'pending') markConnectionUpdatesRead();
@@ -64,7 +106,10 @@ onMounted(async () => {
         Try again
       </button>
     </div>
-    <p v-else-if="loading" role="status">Loading your connections…</p>
+    <div v-else-if="loading" class="loading-state" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>Loading your connections…</p>
+    </div>
     <template v-else>
       <div class="connection-tabs main-tabs" role="tablist" aria-label="Connection views">
         <button
@@ -165,10 +210,11 @@ onMounted(async () => {
               </button>
               <button
                 class="danger-button end-connection"
-                @click="endStudyConnection(connection.connectionId)"
+                :disabled="endingConnectionIds.has(connection.connectionId)"
+                @click="handleEndConnection(connection.connectionId)"
               >
                 <X :size="16" aria-hidden="true" />
-                End connection
+                {{ endingConnectionIds.has(connection.connectionId) ? "Ending connection…" : "End connection" }}
               </button>
             </div>
           </article>
@@ -219,7 +265,15 @@ onMounted(async () => {
                 </div>
                 <div class="request-info">
                   <div class="request-heading">
-                    <h2>{{ request.senderName || "A student" }}</h2>
+                    <h2>
+                      <button
+                        type="button"
+                        class="person-name-link"
+                        @click="viewProfile(request.senderId)"
+                      >
+                        {{ request.senderName || "A student" }}
+                      </button>
+                    </h2>
                     <span class="tag request-status">Received</span>
                   </div>
                   <p v-if="request.message" class="request-message">
@@ -232,11 +286,21 @@ onMounted(async () => {
                 </div>
               </div>
               <div class="request-actions">
-                <button class="primary-button" @click="acceptMatchRequest(request.requestId)">
-                  <Check :size="16" aria-hidden="true" /> Accept
+                <button
+                  class="primary-button"
+                  :disabled="Boolean(processingRequestIds.get(request.requestId))"
+                  @click="handleAccept(request.requestId)"
+                >
+                  <Check :size="16" aria-hidden="true" />
+                  {{ processingRequestIds.get(request.requestId) === 'accept' ? "Accepting…" : "Accept" }}
                 </button>
-                <button class="secondary-button" @click="declineMatchRequest(request.requestId)">
-                  <X :size="16" aria-hidden="true" /> Decline
+                <button
+                  class="secondary-button"
+                  :disabled="Boolean(processingRequestIds.get(request.requestId))"
+                  @click="handleDecline(request.requestId)"
+                >
+                  <X :size="16" aria-hidden="true" />
+                  {{ processingRequestIds.get(request.requestId) === 'decline' ? "Declining…" : "Decline" }}
                 </button>
               </div>
             </article>
@@ -260,7 +324,15 @@ onMounted(async () => {
                 </div>
                 <div class="request-info">
                   <div class="request-heading">
-                    <h2>{{ request.recipientName || "A student" }}</h2>
+                    <h2>
+                      <button
+                        type="button"
+                        class="person-name-link"
+                        @click="viewProfile(request.recipientId)"
+                      >
+                        {{ request.recipientName || "A student" }}
+                      </button>
+                    </h2>
                     <span class="tag request-status">Awaiting response</span>
                   </div>
                   <p v-if="request.message" class="request-message">
@@ -281,6 +353,34 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.loading-state p {
+  margin: 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .connection-list {
   display: grid;
   gap: 14px;
@@ -361,6 +461,32 @@ onMounted(async () => {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+
+.person-name-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-heading, #2c2523);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: underline;
+  text-decoration-color: #d1c7bd;
+  text-underline-offset: 4px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.person-name-link:hover,
+.person-name-link:focus-visible {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
 .connection-person,
 .request-main {
   display: flex;
@@ -374,10 +500,18 @@ onMounted(async () => {
   min-width: 0;
 }
 
-.connection-person-info h2,
-.request-heading h2 {
+.connection-person-info h2 {
   margin: 0 0 6px;
   font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.request-heading h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.1rem;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
