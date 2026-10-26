@@ -46,8 +46,7 @@ async function refreshConnectionUpdates() {
   checkingUpdates = true;
   try {
     if (route.path === "/student/connections") {
-      if (await loadConnectionsAndRequests({ silent: true }))
-        markConnectionUpdatesRead();
+      await loadConnectionsAndRequests({ silent: true });
     } else {
       await checkForConnectionUpdates();
     }

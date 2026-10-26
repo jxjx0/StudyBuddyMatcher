@@ -1,7 +1,30 @@
-import { ref } from "vue";
-import { user } from "./useAuth";
+import { ref, watch } from "vue";
+import { user, token } from "./useAuth";
 import { api } from "../services/api";
 import { toast } from "./useNotifications";
+
+const studentProfileCache = new Map();
+
+/**
+ * Fetch a student's public profile with in-memory caching.
+ *
+ * Returns null when the account has been definitively deleted (HTTP 404).
+ * Re-throws for any other error (e.g. service temporarily down, 500) so the
+ * caller can show a placeholder instead of removing the connection.
+ */
+async function fetchStudentOrNull(studentId) {
+  if (studentProfileCache.has(studentId)) {
+    return studentProfileCache.get(studentId);
+  }
+  const session = token.value;
+  const headers = session ? { Authorization: `Bearer ${session}` } : {};
+  const response = await fetch(`/api/students/${encodeURIComponent(studentId)}`, { headers });
+  if (response.status === 404) return null; // account definitively deleted
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  const data = await response.json();
+  studentProfileCache.set(studentId, data);
+  return data;
+}
 
 const incomingRequests = ref([]);
 const outgoingRequests = ref([]);
@@ -10,39 +33,39 @@ const loading = ref(false);
 const cancellingRequestIds = ref(new Set());
 const error = ref("");
 const unreadConnectionUpdates = ref(0);
-const notificationStateByStudent = new Map();
+const hasLoadedOnce = ref(false);
+let cachedUserId = null;
+let lastAcknowledgedPendingCount = 0;
 
-function updateNotificationState(studentId, incoming) {
-  const incomingIds = new Set(incoming.map((request) => request.requestId));
-  let state = notificationStateByStudent.get(studentId);
-
-  if (!state) {
-    state = {
-      incomingIds,
-      unreadIds: new Set(),
-    };
-    notificationStateByStudent.set(studentId, state);
-  } else {
-    for (const requestId of incomingIds) {
-      if (!state.incomingIds.has(requestId))
-        state.unreadIds.add(`request:${requestId}`);
-    }
-    for (const requestId of state.incomingIds) {
-      if (!incomingIds.has(requestId))
-        state.unreadIds.delete(`request:${requestId}`);
-    }
-    state.incomingIds = incomingIds;
-  }
-
-  if (user.value?.userId === studentId)
-    unreadConnectionUpdates.value = state.unreadIds.size;
+function resetConnectionsCache() {
+  incomingRequests.value = [];
+  outgoingRequests.value = [];
+  activeConnections.value = [];
+  loading.value = false;
+  error.value = "";
+  unreadConnectionUpdates.value = 0;
+  hasLoadedOnce.value = false;
+  cachedUserId = null;
+  lastAcknowledgedPendingCount = 0;
+  studentProfileCache.clear();
 }
 
+// Automatically reset cached connections whenever the logged-in user changes or signs out
+watch(
+  () => user.value?.userId,
+  (newId, oldId) => {
+    if (newId !== oldId) {
+      resetConnectionsCache();
+    }
+  },
+);
+
 function markConnectionUpdatesRead() {
-  const studentId = user.value?.userId;
-  if (!studentId) return;
-  const state = notificationStateByStudent.get(studentId);
-  if (state) state.unreadIds.clear();
+  lastAcknowledgedPendingCount = Math.max(
+    incomingRequests.value.length,
+    unreadConnectionUpdates.value,
+    lastAcknowledgedPendingCount,
+  );
   unreadConnectionUpdates.value = 0;
 }
 
@@ -50,15 +73,18 @@ async function checkForConnectionUpdates() {
   const studentId = user.value?.userId;
   if (!studentId) return false;
   try {
-    const encodedId = encodeURIComponent(studentId);
-    const [incoming, outgoing] = await Promise.all([
-      api(`/api/match-requests/pending?studentId=${encodedId}`),
-      api(`/api/match-requests/outgoing-pending?studentId=${encodedId}`),
-    ]);
+    const res = await api(`/api/match-requests/pending/count`);
     if (user.value?.userId !== studentId) return false;
-    incomingRequests.value = incoming;
-    outgoingRequests.value = outgoing;
-    updateNotificationState(studentId, incoming);
+    const serverCount = res.count ?? 0;
+    // Only show unread badge if new pending requests have arrived beyond what was acknowledged
+    if (serverCount > lastAcknowledgedPendingCount) {
+      unreadConnectionUpdates.value = serverCount - lastAcknowledgedPendingCount;
+    } else {
+      unreadConnectionUpdates.value = 0;
+      if (serverCount < lastAcknowledgedPendingCount) {
+        lastAcknowledgedPendingCount = serverCount;
+      }
+    }
     return true;
   } catch (problem) {
     console.error("Could not check for connection updates.", problem);
@@ -93,7 +119,14 @@ function connectionStatus(studentId) {
 async function loadConnectionsAndRequests({ silent = false } = {}) {
   const currentStudentId = user.value?.userId;
   if (!currentStudentId) return false;
-  if (!silent) loading.value = true;
+
+  // If the user changed, reset before loading
+  if (cachedUserId && cachedUserId !== currentStudentId) {
+    resetConnectionsCache();
+  }
+
+  // If we've already loaded once for this user, keep the existing data visible and refresh in background
+  if (!silent && !hasLoadedOnce.value) loading.value = true;
   error.value = "";
   try {
     const studentId = encodeURIComponent(currentStudentId);
@@ -102,19 +135,46 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
       api(`/api/match-requests/outgoing-pending?studentId=${studentId}`),
       api(`/api/connections?studentId=${studentId}`),
     ]);
+
+    let deletedPartnersCount = 0;
+
     const [loadedIncoming, loadedOutgoing, loadedConnections] =
       await Promise.all([
         Promise.all(
-          incoming.map(async (request) => {
-            const sender = await api(`/api/students/${request.senderId}`);
-            return { ...request, senderName: sender.name };
-          }),
+          incoming
+            .filter((req) => req && req.requestId)
+            .map(async (request) => {
+              try {
+                const sender = await fetchStudentOrNull(request.senderId);
+                if (sender === null) {
+                  // The student who sent this request has deleted their account.
+                  // Auto-decline/clean up the orphaned match request so it doesn't linger.
+                  void api(
+                    `/api/match-requests/${request.requestId}/decline?respondentId=${encodeURIComponent(currentStudentId)}`,
+                    { method: "POST" },
+                  ).catch(() => {});
+                  return null;
+                }
+                return { ...request, senderName: sender.name };
+              } catch {
+                return { ...request, senderName: "Former Student" };
+              }
+            }),
         ),
         Promise.all(
-          outgoing.map(async (request) => {
-            const recipient = await api(`/api/students/${request.recipientId}`);
-            return { ...request, recipientName: recipient.name };
-          }),
+          outgoing
+            .filter((req) => req && req.requestId)
+            .map(async (request) => {
+              try {
+                const recipient = await fetchStudentOrNull(request.recipientId);
+                if (recipient === null) {
+                  return null;
+                }
+                return { ...request, recipientName: recipient.name };
+              } catch {
+                return { ...request, recipientName: "Former Student" };
+              }
+            }),
         ),
         Promise.all(
           connections.map(async (connection) => {
@@ -122,30 +182,79 @@ async function loadConnectionsAndRequests({ silent = false } = {}) {
               connection.studentAId === currentStudentId
                 ? connection.studentBId
                 : connection.studentAId;
-            const [partner, contact] = await Promise.all([
-              api(`/api/students/${partnerId}`),
-              api(`/api/connections/${connection.connectionId}/contact`),
-            ]);
-            return {
-              ...connection,
-              partnerName: partner.name,
-              partnerEmail: contact.email,
-              partnerContactNumber: contact.contactNumber,
-            };
+            try {
+              // Fetch the partner profile and their contact details in parallel —
+              // neither depends on the other, so there is no reason to wait for
+              // one before starting the other.
+              const [partner, contact] = await Promise.all([
+                fetchStudentOrNull(partnerId),
+                api(`/api/connections/${connection.connectionId}/contact`).catch(() => ({})),
+              ]);
+              if (partner === null) {
+                // Account confirmed deleted (404) — clean up the orphaned record
+                // and exclude it from the list so a notification can be shown.
+                deletedPartnersCount++;
+                void api(
+                  `/api/connections/${connection.connectionId}?requesterId=${encodeURIComponent(currentStudentId)}`,
+                  { method: "DELETE" },
+                ).catch(() => {});
+                return null;
+              }
+              return {
+                ...connection,
+                partnerId,
+                partnerName: partner.name,
+                partnerEmail: contact.email || "",
+                partnerContactNumber: contact.contactNumber || "",
+              };
+            } catch {
+              // Transient failure (service restarting, network hiccup, etc.) —
+              // never delete a real connection record for a temporary error.
+              // Show a placeholder so the connection stays visible and safe.
+              return {
+                ...connection,
+                partnerId,
+                partnerName: "Study Buddy",
+                partnerEmail: "",
+                partnerContactNumber: "",
+              };
+            }
           }),
         ),
       ]);
+
     if (user.value?.userId !== currentStudentId) return false;
-    incomingRequests.value = loadedIncoming;
-    outgoingRequests.value = loadedOutgoing;
-    activeConnections.value = loadedConnections;
-    updateNotificationState(currentStudentId, loadedIncoming);
+
+    incomingRequests.value = loadedIncoming.filter(Boolean);
+    outgoingRequests.value = loadedOutgoing.filter(Boolean);
+    activeConnections.value = loadedConnections.filter(Boolean);
+    const incomingCount = incomingRequests.value.length;
+    if (incomingCount > lastAcknowledgedPendingCount) {
+      unreadConnectionUpdates.value = incomingCount - lastAcknowledgedPendingCount;
+    } else {
+      unreadConnectionUpdates.value = 0;
+      if (incomingCount < lastAcknowledgedPendingCount) {
+        lastAcknowledgedPendingCount = incomingCount;
+      }
+    }
+    hasLoadedOnce.value = true;
+    cachedUserId = currentStudentId;
+
+    if (deletedPartnersCount > 0 && !silent) {
+      toast(
+        deletedPartnersCount === 1
+          ? "A study buddy connection was removed because the student's account was deleted."
+          : `${deletedPartnersCount} study buddy connections were removed because their accounts were deleted.`,
+        "info",
+      );
+    }
+
     return true;
   } catch (problem) {
     error.value = `Could not load requests and connections: ${problem.message}`;
     return false;
   } finally {
-      if (!silent) loading.value = false;
+    if (!silent) loading.value = false;
   }
 }
 
@@ -277,6 +386,8 @@ export function useConnections() {
     cancellingRequestIds,
     error,
     unreadConnectionUpdates,
+    hasLoadedOnce,
+    resetConnectionsCache,
     loadConnectionsAndRequests,
     checkForConnectionUpdates,
     markConnectionUpdatesRead,

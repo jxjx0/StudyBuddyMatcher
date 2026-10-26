@@ -16,7 +16,7 @@ spring:
       idle-timeout: 60000
   sql:
     init:
-      mode: never
+      mode: ${SPRING_SQL_INIT_MODE:always}
 
 # Other services this one calls. Kept in configuration rather than hard-coded
 # in Java, so they can be repointed without a rebuild.

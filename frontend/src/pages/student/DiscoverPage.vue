@@ -19,10 +19,11 @@ const {
   user,
 } = useAppState();
 const {
-  connectionStatus: getConnectionStatus,
-  connectToStudent,
-  cancelMatchRequestFor,
+  incomingRequests,
   outgoingRequests,
+  activeConnections,
+  sendMatchRequest,
+  cancelMatchRequestFor,
   loadConnectionsAndRequests,
 } = useConnections();
 const router = useRouter();
@@ -150,31 +151,46 @@ function resetFilters() {
   };
 }
 function viewProfile(id) {
-  router.push({ name: "student-public-profile", query: { id } });
+  router.push({ name: "student-public-profile", query: { id, from: "discover" } });
 }
 function requestStatus(studentId) {
-  if (sentRequestIds.value.has(studentId)) return "Request Sent";
-  return getConnectionStatus(studentId);
+  if (
+    activeConnections.value.some(
+      (connection) =>
+        connection.studentAId === studentId ||
+        connection.studentBId === studentId,
+    )
+  )
+    return "Connected";
+  if (
+    incomingRequests.value.some((request) => request.senderId === studentId)
+  )
+    return "Respond to Request";
+  if (
+    sentRequestIds.value.has(studentId) ||
+    outgoingRequests.value.some((request) => request.recipientId === studentId)
+  )
+    return "Request Sent";
+  return "Connect";
 }
 function connect(student) {
   if (sendingRequestIds.value.has(student.id)) return;
   const status = requestStatus(student.id);
-  if (status === "Request Sent") {
-    void cancelPendingRequest(student.id);
+  if (status === "Respond to Request") {
+    viewProfile(student.id);
     return;
   }
-  if (status === "Accept request") {
-    void completeConnection(student.id);
+  if (status === "Request Sent") {
+    void cancelPendingRequest(student.id);
     return;
   }
   if (status !== "Connect") return;
   requestStudent.value = student;
 }
 async function completeConnection(studentId, message = "") {
-  const status = requestStatus(studentId);
   sendingRequestIds.value = new Set(sendingRequestIds.value).add(studentId);
   try {
-    if (await connectToStudent(studentId, message) && status === "Connect")
+    if (await sendMatchRequest(studentId, message))
       sentRequestIds.value = new Set(sentRequestIds.value).add(studentId);
   } finally {
     const pending = new Set(sendingRequestIds.value);
@@ -353,16 +369,12 @@ onBeforeRouteLeave(() => {
       </div>
     </div>
 
-    <div class="results-heading">
+    <div v-if="!shownLoading" class="results-heading">
       <p role="status">
         {{
-          shownLoading
-            ? tab === "matches"
-              ? "Finding your best matches…"
-              : "Loading students…"
-            : tab === "matches"
-              ? `${shownStudents.length} matches found`
-              : `${shownStudents.length} students found`
+          tab === "matches"
+            ? `${shownStudents.length} matches found`
+            : `${shownStudents.length} students found`
         }}
       </p>
       <button class="text-button" @click="resetFilters">Reset filters</button>
@@ -371,7 +383,11 @@ onBeforeRouteLeave(() => {
       <p>{{ shownError }}</p>
       <button class="secondary-button" @click="retry">Try again</button>
     </div>
-    <template v-else-if="!shownLoading">
+    <div v-else-if="shownLoading" class="loading-state" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>{{ tab === 'matches' ? 'Finding your best matches…' : 'Loading students…' }}</p>
+    </div>
+    <template v-else>
       <div v-if="!pagedStudents.length" class="empty-state">
         <Search :size="30" />
         <template v-if="tab === 'matches'">
@@ -422,31 +438,41 @@ onBeforeRouteLeave(() => {
           </div>
           <div class="form-actions">
             <button
-              class="secondary-button"
-              :aria-label="`View ${student.name}'s public profile`"
+              v-if="requestStatus(student.id) === 'Respond to Request'"
+              class="primary-button"
+              :aria-label="`Respond to request from ${student.name}`"
               @click="viewProfile(student.id)"
             >
-              View profile
+              Respond to request
             </button>
-            <button
-              class="primary-button"
-              :disabled="
-                sendingRequestIds.has(student.id) ||
-                !['Connect', 'Accept request', 'Request Sent'].includes(requestStatus(student.id))
-              "
-              :aria-label="
-                requestStatus(student.id) === 'Request Sent'
-                  ? `Cancel connection request to ${student.name}`
-                  : `${requestStatus(student.id)} with ${student.name}`
-              "
-              @click="connect(student)"
-            >
-              {{
-                sendingRequestIds.has(student.id)
-                  ? "Sending…"
-                  : requestStatus(student.id)
-              }}
-            </button>
+            <template v-else>
+              <button
+                class="secondary-button"
+                :aria-label="`View ${student.name}'s public profile`"
+                @click="viewProfile(student.id)"
+              >
+                View profile
+              </button>
+              <button
+                class="primary-button"
+                :disabled="
+                  sendingRequestIds.has(student.id) ||
+                  !['Connect', 'Request Sent'].includes(requestStatus(student.id))
+                "
+                :aria-label="
+                  requestStatus(student.id) === 'Request Sent'
+                    ? `Cancel connection request to ${student.name}`
+                    : `${requestStatus(student.id)} with ${student.name}`
+                "
+                @click="connect(student)"
+              >
+                {{
+                  sendingRequestIds.has(student.id)
+                    ? "Sending…"
+                    : requestStatus(student.id)
+                }}
+              </button>
+            </template>
           </div>
         </article>
       </div>
@@ -479,3 +505,33 @@ onBeforeRouteLeave(() => {
     />
   </section>
 </template>
+
+<style scoped>
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.loading-state p {
+  margin: 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>

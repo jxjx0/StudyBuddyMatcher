@@ -1,34 +1,124 @@
 <script setup>
-import { computed, ref, watch, onScopeDispose } from "vue";
-import { useRoute } from "vue-router";
+import { computed, ref, watch, onMounted, onScopeDispose } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { Check, X } from "lucide-vue-next";
 import { useAppState } from "../../composables/useAppState";
 import { useConnections } from "../../composables/useConnections";
 import ConnectionRequestDialog from "../../components/ConnectionRequestDialog.vue";
-const { loadPublicProfile } = useAppState();
+const { loadPublicProfile, user } = useAppState();
 const {
-  connectionStatus,
-  connectToStudent,
+  incomingRequests,
+  outgoingRequests,
+  activeConnections,
+  sendMatchRequest,
   cancelMatchRequestFor,
+  acceptMatchRequest,
+  declineMatchRequest,
   loadConnectionsAndRequests,
 } = useConnections();
 const route = useRoute();
+const router = useRouter();
+const respondingAction = ref(null); // 'accept' | 'decline' | null
 const loading = ref(false);
 const error = ref("");
 const selectedProfile = ref(null);
+const sending = ref(false);
+const cancelling = ref(false);
+const justSent = ref(false);
 const requestDialogOpen = ref(false);
-const submittingRequest = ref(false);
-const profileConnectionStatus = computed(() =>
-  selectedProfile.value
-    ? connectionStatus(selectedProfile.value.id)
-    : "Connect",
-);
 let controller;
+
+const connectionStatus = computed(() => {
+  const profileId = selectedProfile.value?.id;
+  if (!profileId) return "Connect";
+  if (user.value?.userId === profileId) return "Self";
+  if (
+    activeConnections.value.some(
+      (conn) => conn.studentAId === profileId || conn.studentBId === profileId,
+    )
+  ) {
+    return "Connected";
+  }
+  if (
+    justSent.value ||
+    outgoingRequests.value.some((req) => req.recipientId === profileId)
+  ) {
+    return "Request Sent";
+  }
+  return "Connect";
+});
+
+
+const incomingRequest = computed(() => {
+  const profileId = selectedProfile.value?.id;
+  if (!profileId) return null;
+  return incomingRequests.value.find((req) => req.senderId === profileId);
+});
+
+async function handleAccept() {
+  if (!incomingRequest.value || respondingAction.value) return;
+  respondingAction.value = 'accept';
+  try {
+    await acceptMatchRequest(incomingRequest.value.requestId);
+    router.push({ path: "/student/connections" });
+  } finally {
+    respondingAction.value = null;
+  }
+}
+
+async function handleDecline() {
+  if (!incomingRequest.value || respondingAction.value) return;
+  respondingAction.value = 'decline';
+  try {
+    await declineMatchRequest(incomingRequest.value.requestId);
+    router.push({ path: "/student/connections" });
+  } finally {
+    respondingAction.value = null;
+  }
+}
+
+async function handleConnect(message = "") {
+  if (!selectedProfile.value?.id || connectionStatus.value !== "Connect" || sending.value) {
+    return;
+  }
+  sending.value = true;
+  try {
+    const success = await sendMatchRequest(selectedProfile.value.id, message);
+    if (success) {
+      justSent.value = true;
+    }
+  } finally {
+    sending.value = false;
+    requestDialogOpen.value = false;
+  }
+}
+
+async function handleCancel() {
+  if (!selectedProfile.value?.id || connectionStatus.value !== "Request Sent" || cancelling.value) {
+    return;
+  }
+  cancelling.value = true;
+  try {
+    if (await cancelMatchRequestFor(selectedProfile.value.id)) {
+      justSent.value = false;
+    }
+  } finally {
+    cancelling.value = false;
+  }
+}
+
+function handlePrimaryAction() {
+  if (connectionStatus.value === "Connect") requestDialogOpen.value = true;
+  else if (connectionStatus.value === "Request Sent") void handleCancel();
+}
+
 async function load() {
   controller?.abort();
   controller = new AbortController();
   const request = controller;
   error.value = "";
   selectedProfile.value = null;
+  justSent.value = false;
   if (!route.query.id) {
     error.value =
       "Choose a student from Discover buddies to view their profile.";
@@ -47,38 +137,33 @@ async function load() {
     if (request === controller) loading.value = false;
   }
 }
-async function submitConnectionRequest(message = "") {
-  if (!selectedProfile.value) return;
-  submittingRequest.value = true;
-  try {
-    await connectToStudent(selectedProfile.value.id, message);
-  } finally {
-    submittingRequest.value = false;
-    requestDialogOpen.value = false;
+
+const backDestination = computed(() => {
+  if (route.query.from === "connections") {
+    return { path: "/student/connections", label: "Back to connections" };
   }
-  async function cancelConnectionRequest() {
-    if (!selectedProfile.value) return;
-    submittingRequest.value = true;
-    try {
-      await cancelMatchRequestFor(selectedProfile.value.id);
-    } finally {
-      submittingRequest.value = false;
-    }
-  }
-}
+  return { path: "/student/discover", label: "Back to discover" };
+});
+
+onMounted(() => {
+  void loadConnectionsAndRequests({ silent: true });
+});
 watch(() => route.query.id, load, { immediate: true });
 onScopeDispose(() => controller?.abort());
 </script>
 <template>
   <section class="page-body narrow-page">
-    <RouterLink class="back-link" to="/student/discover"
-      >Back to discover</RouterLink
+    <RouterLink class="back-link" :to="backDestination.path"
+      >{{ backDestination.label }}</RouterLink
     >
     <header class="page-heading">
       <h1>Public study profile</h1>
       <p>Get to know a student’s courses and study preferences.</p>
     </header>
-    <p v-if="loading" role="status">Loading profile…</p>
+    <div v-if="loading" class="loading-state" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>Loading profile…</p>
+    </div>
     <div v-else-if="error" class="error-message" role="alert">
       <p>{{ error }}</p>
       <button class="secondary-button" @click="load">Try again</button>
@@ -119,48 +204,78 @@ onScopeDispose(() => controller?.abort());
           <dd>{{ selectedProfile.goal }}</dd>
         </div>
       </dl>
-      <p v-if="profileConnectionStatus !== 'Connected'" class="hint">
+      <p v-if="connectionStatus !== 'Connected'" class="hint">
         Contact details remain private until your connection is accepted.
       </p>
       <div class="form-actions">
+        <template v-if="incomingRequest">
+          <button
+            class="primary-button"
+            :disabled="Boolean(respondingAction)"
+            @click="handleAccept"
+          >
+            <Check :size="16" aria-hidden="true" />
+            {{ respondingAction === 'accept' ? "Accepting…" : "Accept request" }}
+          </button>
+          <button
+            class="secondary-button"
+            :disabled="Boolean(respondingAction)"
+            @click="handleDecline"
+          >
+            <X :size="16" aria-hidden="true" />
+            {{ respondingAction === 'decline' ? "Declining…" : "Decline" }}
+          </button>
+        </template>
         <button
-          v-if="profileConnectionStatus === 'Connect'"
+          v-else-if="connectionStatus !== 'Self'"
           class="primary-button"
-          :disabled="submittingRequest"
-          @click="requestDialogOpen = true"
+          :disabled="sending || cancelling || !['Connect', 'Request Sent'].includes(connectionStatus)"
+          :aria-label="
+            connectionStatus === 'Request Sent'
+              ? `Cancel connection request to ${selectedProfile.name}`
+              : undefined
+          "
+          @click="handlePrimaryAction"
         >
-          Connect
-        </button>
-        <button
-          v-else-if="profileConnectionStatus === 'Accept request'"
-          class="primary-button"
-          :disabled="submittingRequest"
-          @click="submitConnectionRequest()"
-        >
-          Accept request
-        </button>
-        <button
-          v-else-if="profileConnectionStatus === 'Request Sent'"
-          class="primary-button"
-          :disabled="submittingRequest"
-          @click="cancelConnectionRequest"
-        >
-          {{ submittingRequest ? "Cancelling…" : "Request Sent" }}
-        </button>
-        <button
-          v-else
-          class="primary-button"
-          disabled
-        >
-          {{ profileConnectionStatus }}
+          {{ sending ? "Sending…" : cancelling ? "Cancelling…" : connectionStatus }}
         </button>
       </div>
     </section>
     <ConnectionRequestDialog
       :student="requestDialogOpen ? selectedProfile : null"
-      :busy="submittingRequest"
+      :busy="sending"
       @close="requestDialogOpen = false"
-      @send="submitConnectionRequest"
+      @send="handleConnect"
     />
   </section>
 </template>
+
+<style scoped>
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.loading-state p {
+  margin: 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>

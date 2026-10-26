@@ -53,9 +53,16 @@ public class MatchRequestService {
 
 		for (int i = 0; i < recipientRequests.size(); i++) {
 			MatchRequest req = recipientRequests.get(i);
-			
+
 			if (req.isPending()) {
-				pendingRequests.add(req);
+				// Validate that sender still exists; if deleted, auto-decline orphan request
+				try {
+					studentClient.findStudent(req.getSenderId());
+					pendingRequests.add(req);
+				} catch (Exception e) {
+					req.decline();
+					matchRequestRepository.save(req);
+				}
 			}
 		}
 		return pendingRequests;
@@ -71,10 +78,22 @@ public class MatchRequestService {
 			MatchRequest req = senderRequests.get(i);
 
 			if (req.isPending()) {
-				pendingRequests.add(req);
+				// Validate that recipient still exists; if deleted, auto-decline orphan request
+				try {
+					studentClient.findStudent(req.getRecipientId());
+					pendingRequests.add(req);
+				} catch (Exception e) {
+					req.decline();
+					matchRequestRepository.save(req);
+				}
 			}
 		}
 		return pendingRequests;
+	}
+
+	public int countPendingFor(String studentId) {
+		if (studentId == null) return 0;
+		return findPendingFor(studentId).size();
 	}
 
 	@Transactional
@@ -175,7 +194,11 @@ public class MatchRequestService {
 		}
 		String otherStudentId = connection.getOtherStudentId(requesterId);
 		if (otherStudentId == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-		return studentClient.findContactDetails(otherStudentId);
+		try {
+			return studentClient.findContactDetails(otherStudentId);
+		} catch (Exception e) {
+			return new StudentContactDto(otherStudentId, "Former Student", "", "");
+		}
 	}
 
 	@Transactional

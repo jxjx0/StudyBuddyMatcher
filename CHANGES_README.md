@@ -29,20 +29,15 @@ for StudyBuddyMatcher. It supplements the project setup instructions in
 The connection service uses the backend Supabase JDBC settings documented in
 [the connection-service README](./backend/connection-service/README.md).
 
-Apply these migrations in the Supabase SQL Editor using a database-owner
-connection:
+The service creates its tables on startup from
+[schema.sql](./backend/connection-service/src/main/resources/schema.sql),
+which permits the `CANCELLED` status.
 
-1. [001_create_connection_tables.sql](./backend/connection-service/migrations/001_create_connection_tables.sql)
-   creates `match_requests` and `study_buddy_connections`, indexes, and
-   database access restrictions.
-2. [002_allow_cancelled_match_requests.sql](./backend/connection-service/migrations/002_allow_cancelled_match_requests.sql)
-   updates the `match_requests` status constraint to permit `CANCELLED`.
-   This is needed when the table existed before cancellation support.
-
-The reported HTTP 500 on request cancellation was caused by the live database
-rejecting `CANCELLED` under its existing status constraint. Applying migration
-002 is required to resolve that database-side cause. Applying migrations to a
-live database was not verified as part of this documentation update.
+The reported HTTP 500 on request cancellation was caused by the database
+rejecting `CANCELLED` under its existing status constraint. For a
+`match_requests` table created before cancellation support, apply
+[002_allow_cancelled_match_requests.sql](./backend/connection-service/migrations/002_allow_cancelled_match_requests.sql)
+once in the Supabase SQL Editor. The shared Supabase database already has it.
 
 ## Study groups
 
