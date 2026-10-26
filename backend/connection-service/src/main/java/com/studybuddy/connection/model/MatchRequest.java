@@ -93,6 +93,11 @@ public class MatchRequest {
 		this.respondedAt = LocalDateTime.now();
 	}
 
+	public void cancel() {
+		this.status = MatchRequestStatus.CANCELLED;
+		this.respondedAt = LocalDateTime.now();
+	}
+
 	public boolean isPending() {
 		return MatchRequestStatus.PENDING.equals(this.status);
 	}

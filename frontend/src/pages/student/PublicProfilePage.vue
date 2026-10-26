@@ -4,12 +4,14 @@ import { useRoute, useRouter } from "vue-router";
 import { Check, X } from "lucide-vue-next";
 import { useAppState } from "../../composables/useAppState";
 import { useConnections } from "../../composables/useConnections";
+import ConnectionRequestDialog from "../../components/ConnectionRequestDialog.vue";
 const { loadPublicProfile, user } = useAppState();
 const {
   incomingRequests,
   outgoingRequests,
   activeConnections,
   sendMatchRequest,
+  cancelMatchRequestFor,
   acceptMatchRequest,
   declineMatchRequest,
   loadConnectionsAndRequests,
@@ -21,7 +23,9 @@ const loading = ref(false);
 const error = ref("");
 const selectedProfile = ref(null);
 const sending = ref(false);
+const cancelling = ref(false);
 const justSent = ref(false);
+const requestDialogOpen = ref(false);
 let controller;
 
 const connectionStatus = computed(() => {
@@ -73,19 +77,39 @@ async function handleDecline() {
   }
 }
 
-async function handleConnect() {
+async function handleConnect(message = "") {
   if (!selectedProfile.value?.id || connectionStatus.value !== "Connect" || sending.value) {
     return;
   }
   sending.value = true;
   try {
-    const success = await sendMatchRequest(selectedProfile.value.id);
+    const success = await sendMatchRequest(selectedProfile.value.id, message);
     if (success) {
       justSent.value = true;
     }
   } finally {
     sending.value = false;
+    requestDialogOpen.value = false;
   }
+}
+
+async function handleCancel() {
+  if (!selectedProfile.value?.id || connectionStatus.value !== "Request Sent" || cancelling.value) {
+    return;
+  }
+  cancelling.value = true;
+  try {
+    if (await cancelMatchRequestFor(selectedProfile.value.id)) {
+      justSent.value = false;
+    }
+  } finally {
+    cancelling.value = false;
+  }
+}
+
+function handlePrimaryAction() {
+  if (connectionStatus.value === "Connect") requestDialogOpen.value = true;
+  else if (connectionStatus.value === "Request Sent") void handleCancel();
 }
 
 async function load() {
@@ -102,9 +126,11 @@ async function load() {
   }
   loading.value = true;
   try {
-    selectedProfile.value = await loadPublicProfile(route.query.id, {
-      signal: request.signal,
-    });
+    const [profile] = await Promise.all([
+      loadPublicProfile(route.query.id, { signal: request.signal }),
+      loadConnectionsAndRequests({ silent: true }),
+    ]);
+    selectedProfile.value = profile;
   } catch (problem) {
     if (problem.name !== "AbortError") error.value = problem.message;
   } finally {
@@ -178,7 +204,7 @@ onScopeDispose(() => controller?.abort());
           <dd>{{ selectedProfile.goal }}</dd>
         </div>
       </dl>
-      <p class="hint">
+      <p v-if="connectionStatus !== 'Connected'" class="hint">
         Contact details remain private until your connection is accepted.
       </p>
       <div class="form-actions">
@@ -203,13 +229,24 @@ onScopeDispose(() => controller?.abort());
         <button
           v-else-if="connectionStatus !== 'Self'"
           class="primary-button"
-          :disabled="sending || connectionStatus !== 'Connect'"
-          @click="handleConnect"
+          :disabled="sending || cancelling || !['Connect', 'Request Sent'].includes(connectionStatus)"
+          :aria-label="
+            connectionStatus === 'Request Sent'
+              ? `Cancel connection request to ${selectedProfile.name}`
+              : undefined
+          "
+          @click="handlePrimaryAction"
         >
-          {{ sending ? "Sending…" : connectionStatus }}
+          {{ sending ? "Sending…" : cancelling ? "Cancelling…" : connectionStatus }}
         </button>
       </div>
     </section>
+    <ConnectionRequestDialog
+      :student="requestDialogOpen ? selectedProfile : null"
+      :busy="sending"
+      @close="requestDialogOpen = false"
+      @send="handleConnect"
+    />
   </section>
 </template>
 

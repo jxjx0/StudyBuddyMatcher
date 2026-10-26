@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS match_requests (
     sender_id UUID NOT NULL,
     recipient_id UUID NOT NULL,
     message VARCHAR(500),
-    status VARCHAR(16) NOT NULL CHECK (status IN ('PENDING', 'ACCEPTED', 'DECLINED')),
+    status VARCHAR(16) NOT NULL CHECK (status IN ('PENDING', 'ACCEPTED', 'DECLINED', 'CANCELLED')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     responded_at TIMESTAMPTZ
 );

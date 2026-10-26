@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -105,5 +106,11 @@ public class MatchRequestController {
 			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is not authenticated");
 		}
 		return matchRequestService.decline(requestId, authenticatedId);
+	}
+
+	@DeleteMapping("/{requestId}")
+	public MatchRequest cancel(@PathVariable String requestId,
+							   @AuthenticationPrincipal Jwt jwt) {
+		return matchRequestService.cancel(requestId, jwt.getClaimAsString("uid"));
 	}
 }

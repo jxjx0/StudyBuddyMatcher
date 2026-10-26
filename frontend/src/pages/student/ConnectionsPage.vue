@@ -9,12 +9,14 @@ const {
   outgoingRequests,
   activeConnections,
   loading,
+  cancellingRequestIds,
   error,
   loadConnectionsAndRequests,
   markConnectionUpdatesRead,
   unreadConnectionUpdates,
   acceptMatchRequest,
   declineMatchRequest,
+  cancelMatchRequest,
   endStudyConnection,
 } = useConnections();
 
@@ -343,6 +345,20 @@ onMounted(async () => {
                     Sent {{ new Date(request.createdAt).toLocaleDateString() }}
                   </p>
                 </div>
+              </div>
+              <div class="request-actions">
+                <button
+                  class="secondary-button"
+                  :disabled="loading || cancellingRequestIds.has(request.requestId)"
+                  :aria-label="`Cancel connection request to ${request.recipientName || 'student'}`"
+                  @click="cancelMatchRequest(request.requestId)"
+                >
+                  {{
+                    cancellingRequestIds.has(request.requestId)
+                      ? "Cancelling…"
+                      : "Cancel request"
+                  }}
+                </button>
               </div>
             </article>
           </div>

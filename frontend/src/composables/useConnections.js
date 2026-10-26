@@ -30,6 +30,7 @@ const incomingRequests = ref([]);
 const outgoingRequests = ref([]);
 const activeConnections = ref([]);
 const loading = ref(false);
+const cancellingRequestIds = ref(new Set());
 const error = ref("");
 const unreadConnectionUpdates = ref(0);
 const hasLoadedOnce = ref(false);
@@ -240,18 +241,55 @@ async function sendMatchRequest(recipientId, message = "") {
       recipientId,
       message,
     });
-    await api(`/api/match-requests?${params}`, { method: "POST" });
+    const result = await api(`/api/match-requests?${params}`, { method: "POST" });
     await loadConnectionsAndRequests();
     if (error.value) {
       toast("Request sent, but the connections list could not be refreshed.", "error");
       return true;
     }
-    toast("Match request sent!");
+    toast(
+      result.status === "ACCEPTED"
+        ? "Connection request accepted!"
+        : "Match request sent!",
+    );
     return true;
   } catch (problem) {
     toast(`Could not send match request: ${problem.message}`, "error");
     return false;
   }
+}
+
+async function cancelMatchRequest(requestId) {
+  if (cancellingRequestIds.value.has(requestId)) return false;
+  cancellingRequestIds.value = new Set(cancellingRequestIds.value).add(requestId);
+  try {
+    await api(`/api/match-requests/${requestId}`, { method: "DELETE" });
+    outgoingRequests.value = outgoingRequests.value.filter(
+      (request) => request.requestId !== requestId,
+    );
+    await loadConnectionsAndRequests({ silent: true });
+    if (error.value) {
+      toast("Request cancelled, but the connections list could not be refreshed.", "error");
+      return true;
+    }
+    toast("Connection request cancelled.");
+    return true;
+  } catch (problem) {
+    toast(`Could not cancel connection request: ${problem.message}`, "error");
+    return false;
+  } finally {
+    const pending = new Set(cancellingRequestIds.value);
+    pending.delete(requestId);
+    cancellingRequestIds.value = pending;
+  }
+}
+
+function cancelMatchRequestFor(studentId) {
+  const request = outgoingRequests.value.find(
+    (item) => item.recipientId === studentId && item.status === "PENDING",
+  );
+  if (!request) return Promise.resolve(false);
+  return cancelMatchRequest(request.requestId);
 }
 
 async function respondToMatchRequest(requestId, action) {
@@ -269,11 +307,13 @@ async function respondToMatchRequest(requestId, action) {
           : "Request declined, but the connections list could not be refreshed.",
         "error",
       );
-      return;
+      return false;
     }
     toast(action === "accept" ? "Match request accepted!" : "Match request declined");
+    return true;
   } catch (problem) {
     toast(`Could not ${action} request: ${problem.message}`, "error");
+    return false;
   }
 }
 
@@ -308,6 +348,7 @@ export function useConnections() {
     outgoingRequests,
     activeConnections,
     loading,
+    cancellingRequestIds,
     error,
     unreadConnectionUpdates,
     hasLoadedOnce,
@@ -316,6 +357,8 @@ export function useConnections() {
     checkForConnectionUpdates,
     markConnectionUpdatesRead,
     sendMatchRequest,
+    cancelMatchRequest,
+    cancelMatchRequestFor,
     acceptMatchRequest,
     declineMatchRequest,
     endStudyConnection,

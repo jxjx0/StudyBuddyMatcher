@@ -6,6 +6,7 @@ import { useAppState } from "../../composables/useAppState";
 import { useConnections } from "../../composables/useConnections";
 import { findMatches } from "../../composables/useMatching";
 import { studyGoals, labelOf } from "../../utils/studyData";
+import ConnectionRequestDialog from "../../components/ConnectionRequestDialog.vue";
 
 const {
   courses,
@@ -22,6 +23,7 @@ const {
   outgoingRequests,
   activeConnections,
   sendMatchRequest,
+  cancelMatchRequestFor,
   loadConnectionsAndRequests,
 } = useConnections();
 const router = useRouter();
@@ -56,6 +58,7 @@ const criterionLabels = {
 
 const sendingRequestIds = ref(new Set());
 const sentRequestIds = ref(new Set());
+const requestStudent = ref(null);
 const page = ref(1);
 const pageSize = 10;
 const shownStudents = computed(() =>
@@ -170,18 +173,44 @@ function requestStatus(studentId) {
     return "Request Sent";
   return "Connect";
 }
-async function connect(studentId) {
-  const status = requestStatus(studentId);
+function connect(student) {
+  if (sendingRequestIds.value.has(student.id)) return;
+  const status = requestStatus(student.id);
   if (status === "Respond to Request") {
-    viewProfile(studentId);
+    viewProfile(student.id);
     return;
   }
-  if (sendingRequestIds.value.has(studentId) || status !== "Connect")
+  if (status === "Request Sent") {
+    void cancelPendingRequest(student.id);
     return;
+  }
+  if (status !== "Connect") return;
+  requestStudent.value = student;
+}
+async function completeConnection(studentId, message = "") {
   sendingRequestIds.value = new Set(sendingRequestIds.value).add(studentId);
   try {
-    if (await sendMatchRequest(studentId))
+    if (await sendMatchRequest(studentId, message))
       sentRequestIds.value = new Set(sentRequestIds.value).add(studentId);
+  } finally {
+    const pending = new Set(sendingRequestIds.value);
+    pending.delete(studentId);
+    sendingRequestIds.value = pending;
+    requestStudent.value = null;
+  }
+}
+async function cancelPendingRequest(studentId) {
+  const request = outgoingRequests.value.find(
+    (item) => item.recipientId === studentId && item.status === "PENDING",
+  );
+  if (!request) return;
+  sendingRequestIds.value = new Set(sendingRequestIds.value).add(studentId);
+  try {
+    if (await cancelMatchRequestFor(studentId)) {
+      const sent = new Set(sentRequestIds.value);
+      sent.delete(studentId);
+      sentRequestIds.value = sent;
+    }
   } finally {
     const pending = new Set(sendingRequestIds.value);
     pending.delete(studentId);
@@ -428,9 +457,14 @@ onBeforeRouteLeave(() => {
                 class="primary-button"
                 :disabled="
                   sendingRequestIds.has(student.id) ||
-                  requestStatus(student.id) !== 'Connect'
+                  !['Connect', 'Request Sent'].includes(requestStatus(student.id))
                 "
-                @click="connect(student.id)"
+                :aria-label="
+                  requestStatus(student.id) === 'Request Sent'
+                    ? `Cancel connection request to ${student.name}`
+                    : `${requestStatus(student.id)} with ${student.name}`
+                "
+                @click="connect(student)"
               >
                 {{
                   sendingRequestIds.has(student.id)
@@ -459,6 +493,16 @@ onBeforeRouteLeave(() => {
         </button>
       </nav>
     </template>
+    <ConnectionRequestDialog
+      :student="requestStudent"
+      :busy="
+        requestStudent
+          ? sendingRequestIds.has(requestStudent.id)
+          : false
+      "
+      @close="requestStudent = null"
+      @send="completeConnection(requestStudent.id, $event)"
+    />
   </section>
 </template>
 
