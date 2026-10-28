@@ -1,6 +1,7 @@
 package com.studybuddy.connection.service;
 
 import com.studybuddy.connection.dto.ChatMessage;
+import com.studybuddy.connection.dto.ChatSummary;
 import com.studybuddy.connection.model.StudyBuddyConnection;
 import com.studybuddy.connection.repository.ChatMessageRepository;
 import com.studybuddy.connection.repository.StudyBuddyConnectionRepository;
@@ -25,6 +26,15 @@ public class ChatService {
   public List<ChatMessage> history(String connectionId, String studentId) {
     requireActiveParticipant(connectionId, studentId);
     return messageRepository.findRecent(connectionId);
+  }
+
+  public List<ChatSummary> summaries(String studentId) {
+    return messageRepository.findSummaries(studentId);
+  }
+
+  public void markRead(String connectionId, String studentId) {
+    requireActiveParticipant(connectionId, studentId);
+    messageRepository.markRead(connectionId, studentId);
   }
 
   @Transactional

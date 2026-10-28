@@ -11,7 +11,6 @@ import {
   X,
 } from "lucide-vue-next";
 import { useConnections } from "../../composables/useConnections";
-import ConnectionChatDialog from "../../components/ConnectionChatDialog.vue";
 
 const {
   incomingRequests,
@@ -32,7 +31,6 @@ const {
 const router = useRouter();
 const connectionTab = ref("active");
 const requestTab = ref("incoming");
-const chatConnection = ref(null);
 
 function initials(name) {
   return (name || "Study buddy")
@@ -217,7 +215,7 @@ onMounted(async () => {
               <button
                 class="primary-button chat-connection"
                 :aria-label="`Chat with ${connection.partnerName || 'study buddy'}`"
-                @click="chatConnection = connection"
+                @click="router.push({ name: 'student-messages', query: { connection: connection.connectionId } })"
               >
                 <MessageCircle :size="16" aria-hidden="true" />
                 Chat
@@ -229,7 +227,7 @@ onMounted(async () => {
                 View profile
               </button>
               <button
-                class="danger-button end-connection"
+                class="text-button end-connection"
                 :disabled="endingConnectionIds.has(connection.connectionId)"
                 @click="handleEndConnection(connection.connectionId)"
               >
@@ -382,11 +380,6 @@ onMounted(async () => {
           </div>
         </div>
       </section>
-      <ConnectionChatDialog
-        v-if="chatConnection"
-        :connection="chatConnection"
-        @close="chatConnection = null"
-      />
     </template>
   </section>
 </template>
@@ -493,22 +486,33 @@ onMounted(async () => {
 }
 
 .connection-card {
-  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1.2fr) auto;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1.2fr);
 }
 
+/* A footer row across the card: main actions left, the destructive one kept quiet on the right. */
 .connection-actions {
   display: flex;
-  flex-direction: column;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  min-width: 150px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 
 .connection-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
   margin: 0;
+  white-space: nowrap;
+}
+
+.connection-actions .end-connection {
+  margin-left: auto;
+  color: #a1332e;
+}
+
+.connection-actions .end-connection:hover:not(:disabled) {
+  background: #f9e8e4;
+  text-decoration: none;
 }
 
 .request-card {
@@ -605,17 +609,6 @@ onMounted(async () => {
   flex: 0 0 auto;
 }
 
-.connection-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  justify-self: end;
-  white-space: nowrap;
-}
-
-.end-connection {
-  white-space: nowrap;
-}
 
 .request-filter {
   display: flex;
@@ -711,17 +704,10 @@ onMounted(async () => {
     grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr);
   }
 
-  .connection-actions,
   .request-actions {
     grid-column: 2;
     justify-self: start;
     flex-direction: row;
-  }
-
-  .connection-actions {
-    grid-column: 2;
-    flex-direction: row;
-    flex-wrap: wrap;
   }
 }
 
@@ -754,12 +740,20 @@ onMounted(async () => {
     flex-direction: column;
   }
 
-  .connection-actions,
   .request-actions {
     grid-column: auto;
     justify-self: stretch;
     justify-content: flex-start;
     flex-direction: column;
+  }
+
+  .connection-actions .chat-connection,
+  .connection-actions .secondary-button {
+    flex: 1;
+  }
+
+  .connection-actions .end-connection {
+    width: 100%;
   }
 }
 </style>

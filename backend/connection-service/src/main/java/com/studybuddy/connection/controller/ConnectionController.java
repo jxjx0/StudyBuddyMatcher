@@ -2,6 +2,7 @@ package com.studybuddy.connection.controller;
 
 import com.studybuddy.connection.dto.StudentContactDto;
 import com.studybuddy.connection.dto.ChatMessage;
+import com.studybuddy.connection.dto.ChatSummary;
 import com.studybuddy.connection.model.StudyBuddyConnection;
 import com.studybuddy.connection.service.ChatService;
 import com.studybuddy.connection.service.MatchRequestService;
@@ -12,6 +13,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -59,6 +61,19 @@ public class ConnectionController {
 	public List<ChatMessage> findMessages(@PathVariable String connectionId,
 										  @AuthenticationPrincipal Jwt jwt) {
 		return chatService.history(connectionId, jwt.getClaimAsString("uid"));
+	}
+
+	/** The signed-in student's conversations, with the latest message and unread count for each. */
+	@GetMapping("/chats")
+	public List<ChatSummary> findChats(@AuthenticationPrincipal Jwt jwt) {
+		return chatService.summaries(jwt.getClaimAsString("uid"));
+	}
+
+	@PostMapping("/{connectionId}/read")
+	public ResponseEntity<Void> markRead(@PathVariable String connectionId,
+										 @AuthenticationPrincipal Jwt jwt) {
+		chatService.markRead(connectionId, jwt.getClaimAsString("uid"));
+		return ResponseEntity.noContent().build();
 	}
 
 	@DeleteMapping("/{connectionId}")

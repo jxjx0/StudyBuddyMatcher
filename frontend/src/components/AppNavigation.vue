@@ -2,9 +2,11 @@
 import { useRoute } from "vue-router";
 import { useAppState } from "../composables/useAppState";
 import { useConnections } from "../composables/useConnections";
+import { useChat } from "../composables/useChat";
 const emit = defineEmits(["navigate"]);
 const { nav } = useAppState();
 const { unreadConnectionUpdates } = useConnections();
+const { totalUnread } = useChat();
 const route = useRoute();
 function isActive(path) {
   if (path === "student/profile" && route.path === "/student/availability")
@@ -34,6 +36,15 @@ function isActive(path) {
         :aria-label="`${unreadConnectionUpdates} new connection updates`"
       >
         {{ unreadConnectionUpdates > 9 ? "9+" : unreadConnectionUpdates }}
+      </span>
+      <span
+        v-if="item.path === 'student/messages' && totalUnread"
+        class="connection-notification"
+        role="status"
+        aria-live="polite"
+        :aria-label="`${totalUnread} unread messages`"
+      >
+        {{ totalUnread > 9 ? "9+" : totalUnread }}
       </span>
     </RouterLink>
   </nav>

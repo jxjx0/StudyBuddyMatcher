@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import { ChevronRight, LogOut, Menu, Sparkles } from "lucide-vue-next";
 import { useAppState } from "../composables/useAppState";
 import { useConnections } from "../composables/useConnections";
+import { useChat } from "../composables/useChat";
 import AppNavigation from "../components/AppNavigation.vue";
 import AppDialog from "../components/AppDialog.vue";
 
@@ -13,6 +14,7 @@ const {
   checkForConnectionUpdates,
   markConnectionUpdatesRead,
 } = useConnections();
+const { startChat, loadSummaries, connected: chatConnected } = useChat();
 const route = useRoute();
 const menuOpen = ref(false);
 const displayName = computed(() => user.value?.name || "StudyBuds member");
@@ -45,7 +47,10 @@ async function refreshConnectionUpdates() {
   if (userRole.value !== "student" || checkingUpdates) return;
   checkingUpdates = true;
   try {
-    if (route.path === "/student/connections") {
+    // Picks up connections accepted since the last check, so their chats get live badges too.
+    // Until chat connects, connecting loads the list itself.
+    if (chatConnected.value) void loadSummaries();
+    if (["/student/connections", "/student/messages"].includes(route.path)) {
       await loadConnectionsAndRequests({ silent: true });
     } else {
       await checkForConnectionUpdates();
@@ -55,6 +60,7 @@ async function refreshConnectionUpdates() {
   }
 }
 onMounted(() => {
+  startChat();
   void refreshConnectionUpdates();
   updateTimer = window.setInterval(refreshConnectionUpdates, 30_000);
   window.addEventListener("focus", refreshConnectionUpdates);

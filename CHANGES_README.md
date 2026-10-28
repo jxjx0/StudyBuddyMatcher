@@ -1,4 +1,4 @@
-# Feature Changes, Fixes, and Tests
+# Feature Changes and Fixes
 
 This document summarizes the connection-request and study-group changes made
 for StudyBuddyMatcher. It supplements the project setup instructions in
@@ -25,8 +25,13 @@ for StudyBuddyMatcher. It supplements the project setup instructions in
 - Kept contact details private until the connection is accepted.
 - Added real-time chat for active connections using an authenticated
   WebSocket/STOMP channel and persisted conversation history.
-- Added a Chat action on each active connection. Messages are limited to 2,000
-  characters and the conversation loads its latest 100 saved messages.
+- Added a Messages tab listing every active connection with its latest message
+  and unread count, plus a total unread badge in the navigation that updates
+  live on any page. The Chat action on each active connection opens that
+  conversation. Messages are limited to 2,000 characters and a conversation
+  loads its latest 100 saved messages.
+- A message stays in the input until the server confirms it, so a rejected
+  send shows an error instead of silently losing the text.
 - Restricted chat history, subscriptions, and sending to the two students in
   that active connection.
 - Configured a dedicated STOMP heartbeat scheduler to help detect stale chat
@@ -65,61 +70,6 @@ once in the Supabase SQL Editor. The shared Supabase database already has it.
 The optional message field for a group leader's rejection response was
 cancelled before implementation. Rejecting a group join request does not
 currently send or save a leader message.
-
-## Relevant tests
-
-The following existing test files cover these features and related behavior:
-
-- [groups.spec.js](./frontend/tests/ui/groups.spec.js)
-  - `leaders see pending work separately from completed request history`
-    verifies that pending requests and request history are shown in group
-    details, not as card-level decision controls.
-  - `member removal confirmation explains the final action` checks the
-    confirmation text.
-  - `students can cancel a pending request from a group card and reapply`,
-    `students can cancel a pending request from the detail dialog`, and
-    `pending requests can be cancelled from My requests` cover group-request
-    cancellation entry points.
-  - Other tests cover request-to-join feedback, loading behavior, group
-    details, and error handling.
-- [MatchRequestServiceTest.java](./backend/connection-service/src/test/java/com/studybuddy/connection/service/MatchRequestServiceTest.java)
-  - Covers reciprocal-request acceptance, duplicate outgoing-request conflict,
-    cancellation by the sender, and rejecting cancellation by a non-sender.
-- [ChatServiceTest.java](./backend/connection-service/src/test/java/com/studybuddy/connection/service/ChatServiceTest.java)
-  covers active-connection authorization, message trimming and validation,
-  plus rejecting access after a connection ends.
-- [ConnectionChatDialog.spec.js](./frontend/tests/ui/ConnectionChatDialog.spec.js)
-  covers authenticated WebSocket setup, loading persisted history, sending and
-  receiving messages, error display, and closing the socket.
-- [GroupIntegrationTest.java](./backend/group-service/src/test/java/com/studybuddy/group/GroupIntegrationTest.java)
-  - Covers group-request approval and history, request cancellation,
-    authorization, and concurrency behavior.
-- [GroupDomainTest.java](./backend/group-service/src/test/java/com/studybuddy/group/GroupDomainTest.java)
-  - Covers terminal join-request decisions and restoration of request history.
-
-Run frontend tests from the `frontend` directory:
-
-```bash
-npm test
-```
-
-Run the connection-service tests from the `backend` directory:
-
-```bash
-.\mvnw.cmd -pl connection-service test
-```
-
-Run the group-service tests from the `backend` directory:
-
-```bash
-.\mvnw.cmd -pl group-service test
-```
-
-The group integration tests require the isolated test database configured by
-the `GROUP_TEST_*` environment variables; see
-[GroupIntegrationTest.java](./backend/group-service/src/test/java/com/studybuddy/group/GroupIntegrationTest.java).
-Automated tests/builds and the live Supabase migration have not been run in this
-environment; the required pnpm and PowerShell/Maven runners were unavailable.
 
 ## Configuration and secrets
 

@@ -1,6 +1,12 @@
 // Shared student profile, discovery filters and sign-in flows.
 import { computed, ref, watch } from "vue";
-import { GraduationCap, ShieldCheck, Sparkles, Users } from "lucide-vue-next";
+import {
+  GraduationCap,
+  MessageCircle,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-vue-next";
 import router from "../router";
 import {
   authenticated,
@@ -314,6 +320,7 @@ const nav = computed(() =>
     : [
         { label: "Discover Buddies", path: "student/discover", icon: Sparkles },
         { label: "My Connections", path: "student/connections", icon: Users },
+        { label: "Messages", path: "student/messages", icon: MessageCircle },
         { label: "Study Groups", path: "student/groups", icon: Users },
         { label: "My Profile", path: "student/profile", icon: GraduationCap },
       ],

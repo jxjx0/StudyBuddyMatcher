@@ -18,6 +18,7 @@ const routes = [
       { path: 'discover', name: 'student-discover', component: () => import('../pages/student/DiscoverPage.vue') },
       { path: 'public-profile', name: 'student-public-profile', component: () => import('../pages/student/PublicProfilePage.vue') },
       { path: 'connections', name: 'student-connections', component: () => import('../pages/student/ConnectionsPage.vue') },
+      { path: 'messages', name: 'student-messages', component: () => import('../pages/student/MessagesPage.vue') },
       { path: 'groups', name: 'student-groups', component: () => import('../pages/student/GroupsPage.vue') },
       { path: 'profile', name: 'student-profile', component: () => import('../pages/student/ProfilePage.vue') },
       { path: 'availability', name: 'student-availability', component: () => import('../pages/student/AvailabilityPage.vue') },
