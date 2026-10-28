@@ -188,7 +188,7 @@ onUnmounted(() => openConversation(null));
           <div>
             <h2>{{ selected.partnerName }}</h2>
             <p class="conversation-status" role="status">
-              {{ connected ? "Online chat connected" : "Connecting…" }}
+              {{ connected ? "Connected" : "Connecting…" }}
             </p>
           </div>
         </header>
