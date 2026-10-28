@@ -49,6 +49,7 @@ const requestEmptyTitle = computed(() => {
 });
 const tab = ref("browse");
 const sendingRequestGroupId = ref(null);
+const cancellingRequestGroupId = ref(null);
 const searchQuery = ref("");
 const selectedCourse = ref("");
 const selectedGoal = ref("");
@@ -177,6 +178,7 @@ async function handleGroupAction({ path, message, method, endGroup }) {
   }
 }
 async function requestToJoinGroup(groupId) {
+  if (busy.value) return;
   sendingRequestGroupId.value = groupId;
   try {
     await handleGroupAction({
@@ -185,6 +187,19 @@ async function requestToJoinGroup(groupId) {
     });
   } finally {
     sendingRequestGroupId.value = null;
+  }
+}
+async function cancelJoinRequest(groupId) {
+  if (busy.value) return;
+  cancellingRequestGroupId.value = groupId;
+  try {
+    await handleGroupAction({
+      path: `/api/groups/${groupId}/join-requests`,
+      method: "DELETE",
+      message: "Join request cancelled",
+    });
+  } finally {
+    cancellingRequestGroupId.value = null;
   }
 }
 function viewGroup(groupId) {
@@ -238,7 +253,7 @@ function viewGroup(groupId) {
       {{ notice }}
     </p>
     <p v-if="loading && !loaded" role="status">Loading groups…</p>
-    <p v-if="detailLoading" role="status">Opening group…</p>
+    <p v-if="detailLoading && !selected" role="status">Opening group…</p>
     <template v-if="loaded && tab !== 'requests'">
       <div
         v-if="tab === 'mine'"
@@ -378,15 +393,14 @@ function viewGroup(groupId) {
               class="cancel-button"
               :disabled="busy"
               :aria-label="`Cancel request to ${group.groupName}`"
-              @click="
-                handleGroupAction({
-                  path: `/api/groups/${group.groupId}/join-requests`,
-                  method: 'DELETE',
-                  message: 'Join request cancelled',
-                })
-              "
+              :aria-busy="cancellingRequestGroupId === group.groupId"
+              @click="cancelJoinRequest(group.groupId)"
             >
-              Cancel request
+              {{
+                cancellingRequestGroupId === group.groupId
+                  ? "Cancelling…"
+                  : "Cancel request"
+              }}
             </button>
             <button
               class="secondary-button"
@@ -476,15 +490,14 @@ function viewGroup(groupId) {
             class="cancel-button"
             :disabled="busy"
             :aria-label="`Cancel request to ${request.groupName}`"
-            @click="
-              handleGroupAction({
-                path: `/api/groups/${request.groupId}/join-requests`,
-                method: 'DELETE',
-                message: 'Join request cancelled',
-              })
-            "
+            :aria-busy="cancellingRequestGroupId === request.groupId"
+            @click="cancelJoinRequest(request.groupId)"
           >
-            Cancel request
+            {{
+              cancellingRequestGroupId === request.groupId
+                ? "Cancelling…"
+                : "Cancel request"
+            }}
           </button>
           <button
             class="secondary-button"
@@ -502,6 +515,7 @@ function viewGroup(groupId) {
       :notice="notice"
       :requests="leaderRequests"
       :busy="busy"
+      :refreshing="detailLoading"
       :error="error"
       @close="closeDetail"
       @edit="openEditor"

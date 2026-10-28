@@ -1,7 +1,6 @@
 package com.studybuddy.connection.model;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 
 /**
  * A study buddy request from one student to another. Accepting it creates a
@@ -22,20 +21,6 @@ public class MatchRequest {
 	private LocalDateTime respondedAt;
 
 	public MatchRequest() {
-	}
-
-	public static MatchRequest restore(String requestId, String senderId, String recipientId,
-									   String message, MatchRequestStatus status,
-									   LocalDateTime createdAt, LocalDateTime respondedAt) {
-		MatchRequest request = new MatchRequest();
-		request.requestId = requestId;
-		request.senderId = senderId;
-		request.recipientId = recipientId;
-		request.message = message;
-		request.status = status;
-		request.createdAt = createdAt;
-		request.respondedAt = respondedAt;
-		return request;
 	}
 
 	public String getRequestId() {
@@ -74,12 +59,24 @@ public class MatchRequest {
 		return status;
 	}
 
+	public void setStatus(MatchRequestStatus status) {
+		this.status = status;
+	}
+
 	public LocalDateTime getCreatedAt() {
 		return createdAt;
 	}
 
+	public void setCreatedAt(LocalDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
 	public LocalDateTime getRespondedAt() {
 		return respondedAt;
+	}
+
+	public void setRespondedAt(LocalDateTime respondedAt) {
+		this.respondedAt = respondedAt;
 	}
 
 	/**
@@ -98,7 +95,7 @@ public class MatchRequest {
 
 	public void cancel() {
 		this.status = MatchRequestStatus.CANCELLED;
-		this.respondedAt = LocalDateTime.now(ZoneId.systemDefault());
+		this.respondedAt = LocalDateTime.now();
 	}
 
 	public boolean isPending() {

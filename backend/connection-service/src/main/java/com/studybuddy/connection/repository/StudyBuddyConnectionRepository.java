@@ -8,89 +8,110 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Storage for study buddy connections backed by PostgreSQL.
+ */
 @Repository
 public class StudyBuddyConnectionRepository {
-	private final JdbcTemplate jdbc;
 
-	private final RowMapper<StudyBuddyConnection> rowMapper = this::mapConnection;
+	private final JdbcTemplate jdbcTemplate;
 
-	public StudyBuddyConnectionRepository(JdbcTemplate jdbc) {
-		this.jdbc = jdbc;
+	public StudyBuddyConnectionRepository(JdbcTemplate jdbcTemplate) {
+		this.jdbcTemplate = jdbcTemplate;
 	}
 
+	private final RowMapper<StudyBuddyConnection> rowMapper = new RowMapper<>() {
+		@Override
+		public StudyBuddyConnection mapRow(ResultSet rs, int rowNum) throws SQLException {
+			StudyBuddyConnection conn = new StudyBuddyConnection();
+			conn.setConnectionId(rs.getString("connection_id"));
+			conn.setStudentAId(rs.getString("student_a_id"));
+			conn.setStudentBId(rs.getString("student_b_id"));
+			conn.setActive(rs.getBoolean("active"));
+
+			Timestamp startedAt = rs.getTimestamp("started_at");
+			if (startedAt != null) {
+				conn.setStartedAt(startedAt.toLocalDateTime());
+			}
+
+			Timestamp endedAt = rs.getTimestamp("ended_at");
+			if (endedAt != null) {
+				conn.setEndedAt(endedAt.toLocalDateTime());
+			}
+			return conn;
+		}
+	};
+
 	public List<StudyBuddyConnection> findAll() {
-		return jdbc.query(
-				"SELECT * FROM study_buddy_connections ORDER BY started_at DESC, connection_id",
-				rowMapper);
+		return jdbcTemplate.query(
+				"SELECT connection_id, student_a_id, student_b_id, started_at, ended_at, active FROM study_buddy_connections ORDER BY started_at DESC",
+				rowMapper
+		);
 	}
 
 	public Optional<StudyBuddyConnection> findById(String connectionId) {
 		if (connectionId == null) return Optional.empty();
-		List<StudyBuddyConnection> connections = jdbc.query(
-				"SELECT * FROM study_buddy_connections WHERE connection_id = ?",
-				rowMapper, UUID.fromString(connectionId));
-		return connections.stream().findFirst();
+		try {
+			UUID id = UUID.fromString(connectionId);
+			List<StudyBuddyConnection> results = jdbcTemplate.query(
+					"SELECT connection_id, student_a_id, student_b_id, started_at, ended_at, active FROM study_buddy_connections WHERE connection_id = ?",
+					rowMapper,
+					id
+			);
+			if (results.isEmpty()) {
+				return Optional.empty();
+			}
+			return Optional.of(results.get(0));
+		} catch (IllegalArgumentException e) {
+			return Optional.empty();
+		}
 	}
 
 	public List<StudyBuddyConnection> findActiveByStudentId(String studentId) {
 		if (studentId == null) return List.of();
-		return jdbc.query("""
-				SELECT * FROM study_buddy_connections
-				WHERE active = true AND (student_a_id = ? OR student_b_id = ?)
-				ORDER BY started_at DESC, connection_id
-				""",
-				rowMapper, UUID.fromString(studentId), UUID.fromString(studentId));
+		try {
+			UUID id = UUID.fromString(studentId);
+			return jdbcTemplate.query(
+					"SELECT connection_id, student_a_id, student_b_id, started_at, ended_at, active FROM study_buddy_connections WHERE active = true AND (student_a_id = ? OR student_b_id = ?) ORDER BY started_at DESC",
+					rowMapper,
+					id,
+					id
+			);
+		} catch (IllegalArgumentException e) {
+			return List.of();
+		}
 	}
 
 	public StudyBuddyConnection save(StudyBuddyConnection connection) {
 		if (connection == null) return null;
-		if (connection.getConnectionId() == null || connection.getConnectionId().isBlank()) {
+		if (connection.getConnectionId() == null || connection.getConnectionId().trim().isEmpty()) {
 			connection.setConnectionId(UUID.randomUUID().toString());
 		}
-		jdbc.update("""
-				INSERT INTO study_buddy_connections
-					(connection_id, student_a_id, student_b_id, started_at, ended_at, active)
+
+		Timestamp startedAt = connection.getStartedAt() != null ? Timestamp.valueOf(connection.getStartedAt()) : Timestamp.valueOf(java.time.LocalDateTime.now());
+		Timestamp endedAt = connection.getEndedAt() != null ? Timestamp.valueOf(connection.getEndedAt()) : null;
+
+		jdbcTemplate.update(
+				"""
+				INSERT INTO study_buddy_connections (connection_id, student_a_id, student_b_id, started_at, ended_at, active)
 				VALUES (?, ?, ?, ?, ?, ?)
-				ON CONFLICT (connection_id) DO UPDATE SET
-					student_a_id = EXCLUDED.student_a_id,
-					student_b_id = EXCLUDED.student_b_id,
-					started_at = EXCLUDED.started_at,
-					ended_at = EXCLUDED.ended_at,
-					active = EXCLUDED.active
+				ON CONFLICT (connection_id) DO UPDATE
+				SET active = EXCLUDED.active,
+				    ended_at = EXCLUDED.ended_at
 				""",
 				UUID.fromString(connection.getConnectionId()),
 				UUID.fromString(connection.getStudentAId()),
 				UUID.fromString(connection.getStudentBId()),
-				toTimestamp(connection.getStartedAt()),
-				toTimestamp(connection.getEndedAt()),
-				connection.isActive());
+				startedAt,
+				endedAt,
+				connection.isActive()
+		);
+
 		return connection;
-	}
-
-	private StudyBuddyConnection mapConnection(ResultSet resultSet, int rowNumber) throws SQLException {
-		Timestamp endedAt = resultSet.getTimestamp("ended_at");
-		return StudyBuddyConnection.restore(
-				resultSet.getString("connection_id"),
-				resultSet.getString("student_a_id"),
-				resultSet.getString("student_b_id"),
-				toLocalDateTime(resultSet.getTimestamp("started_at")),
-				toLocalDateTime(endedAt),
-				resultSet.getBoolean("active"));
-	}
-
-	private static Timestamp toTimestamp(LocalDateTime value) {
-		return value == null ? null
-				: Timestamp.from(value.atZone(ZoneId.systemDefault()).toInstant());
-	}
-
-	private static LocalDateTime toLocalDateTime(Timestamp value) {
-		return value == null ? null
-				: value.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 	}
 }

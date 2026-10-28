@@ -17,18 +17,6 @@ public class StudyBuddyConnection {
 	public StudyBuddyConnection() {
 	}
 
-	public static StudyBuddyConnection restore(String connectionId, String studentAId, String studentBId,
-											   LocalDateTime startedAt, LocalDateTime endedAt, boolean active) {
-		StudyBuddyConnection connection = new StudyBuddyConnection();
-		connection.connectionId = connectionId;
-		connection.studentAId = studentAId;
-		connection.studentBId = studentBId;
-		connection.startedAt = startedAt;
-		connection.endedAt = endedAt;
-		connection.active = active;
-		return connection;
-	}
-
 	public String getConnectionId() {
 		return connectionId;
 	}
@@ -57,8 +45,20 @@ public class StudyBuddyConnection {
 		return startedAt;
 	}
 
+	public void setStartedAt(LocalDateTime startedAt) {
+		this.startedAt = startedAt;
+	}
+
 	public LocalDateTime getEndedAt() {
 		return endedAt;
+	}
+
+	public void setEndedAt(LocalDateTime endedAt) {
+		this.endedAt = endedAt;
+	}
+
+	public void setActive(boolean active) {
+		this.active = active;
 	}
 
 	public void end() {

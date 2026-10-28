@@ -40,3 +40,7 @@ target/
 
 # macOS
 .DS_Store
+
+# Frontend production build
+frontend/dist/
+dist/

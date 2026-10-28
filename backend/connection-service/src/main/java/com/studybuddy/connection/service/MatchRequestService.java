@@ -42,7 +42,8 @@ public class MatchRequestService {
 
 	public MatchRequest findById(String requestId) {
 		return matchRequestRepository.findById(requestId)
-				.orElseThrow(() -> new IllegalArgumentException("MatchRequest not found with id: " + requestId));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+						"MatchRequest not found with id: " + requestId));
 	}
 
 	public List<MatchRequest> findPendingFor(String studentId) {
@@ -53,9 +54,16 @@ public class MatchRequestService {
 
 		for (int i = 0; i < recipientRequests.size(); i++) {
 			MatchRequest req = recipientRequests.get(i);
-			
+
 			if (req.isPending()) {
-				pendingRequests.add(req);
+				// Validate that sender still exists; if deleted, auto-decline orphan request
+				try {
+					studentClient.findStudent(req.getSenderId());
+					pendingRequests.add(req);
+				} catch (Exception e) {
+					req.decline();
+					matchRequestRepository.save(req);
+				}
 			}
 		}
 		return pendingRequests;
@@ -71,10 +79,22 @@ public class MatchRequestService {
 			MatchRequest req = senderRequests.get(i);
 
 			if (req.isPending()) {
-				pendingRequests.add(req);
+				// Validate that recipient still exists; if deleted, auto-decline orphan request
+				try {
+					studentClient.findStudent(req.getRecipientId());
+					pendingRequests.add(req);
+				} catch (Exception e) {
+					req.decline();
+					matchRequestRepository.save(req);
+				}
 			}
 		}
 		return pendingRequests;
+	}
+
+	public int countPendingFor(String studentId) {
+		if (studentId == null) return 0;
+		return findPendingFor(studentId).size();
 	}
 
 	@Transactional
@@ -83,7 +103,7 @@ public class MatchRequestService {
 			throw new IllegalArgumentException("Sender and recipient IDs must not be null");
 		}
 		if (senderId.equals(recipientId)) {
-			throw new IllegalArgumentException("Cannot send match request to yourself");
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot send match request to yourself");
 		}
 
 		List<StudyBuddyConnection> activeConnections = connectionRepository.findActiveByStudentId(senderId);
@@ -175,7 +195,11 @@ public class MatchRequestService {
 		}
 		String otherStudentId = connection.getOtherStudentId(requesterId);
 		if (otherStudentId == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-		return studentClient.findContactDetails(otherStudentId);
+		try {
+			return studentClient.findContactDetails(otherStudentId);
+		} catch (Exception e) {
+			return new StudentContactDto(otherStudentId, "Former Student", "", "");
+		}
 	}
 
 	@Transactional

@@ -35,10 +35,12 @@ public class StudentService {
 		return studentRepository.findAll().stream().map(this::toDto).toList();
 	}
 
+	@Transactional
 	public StudentDto findById(String userId) {
 		return toDto(findStudent(userId));
 	}
 
+	@Transactional
 	public StudentContactDto findContactDetails(String userId) {
 		Student student = findStudent(userId);
 		User account = userRepository.findById(userId)
@@ -53,7 +55,6 @@ public class StudentService {
 		Student student = new Student(null, request.getEmail(), request.getPassword(), AccountStatus.ACTIVE);
 		apply(student, request);
 		Student created = (Student) accounts.create(student);
-		studentRepository.save(created);
 		return toDto(created);
 	}
 
@@ -81,8 +82,25 @@ public class StudentService {
 	}
 
 	private Student findStudent(String userId) {
-		return studentRepository.findById(userId)
-				.orElseThrow(() -> new AccountNotFoundException("Student not found"));
+		return studentRepository.findById(userId).orElseGet(() -> {
+			Student account = userRepository.findStudentById(userId)
+					.orElseThrow(() -> new AccountNotFoundException("Student not found"));
+			ensureRequiredProfileFields(account);
+			if (studentRepository.saveIfAbsent(account)) userRepository.save(account);
+			return studentRepository.findById(userId)
+					.orElseThrow(() -> new AccountNotFoundException("Student profile could not be created"));
+		});
+	}
+
+	private static void ensureRequiredProfileFields(Student student) {
+		if (student.getName() == null || student.getName().isBlank() || student.getName().length() > 100)
+			student.setName("Student");
+		if (student.getSchool() == null || student.getSchool().isBlank() || student.getSchool().length() > 200)
+			student.setSchool("Undeclared");
+		if (student.getProgramme() == null || student.getProgramme().isBlank() || student.getProgramme().length() > 200)
+			student.setProgramme("Undeclared");
+		if (student.getYearOfStudy() < 1 || student.getYearOfStudy() > 5)
+			student.setYearOfStudy(1);
 	}
 
 	// apply() copies the data from a StudentRequest (the incoming JSON) onto a Student object.

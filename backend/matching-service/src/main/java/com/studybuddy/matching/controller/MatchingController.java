@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClientException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import com.studybuddy.matching.client.StudentClient;
 import com.studybuddy.matching.dto.StudentDto;
@@ -40,14 +43,21 @@ public class MatchingController {
 	@PostMapping("/students/{studentId}/search")
 	public List<MatchResult> findMatches(
 			@PathVariable String studentId,
-			@RequestBody(required = false) SearchCriteria criteria) {
+			@RequestBody(required = false) SearchCriteria criteria,
+			@AuthenticationPrincipal Jwt jwt) {
+		if (!isAdmin(jwt) && !studentId.equals(jwt.getClaimAsString("uid")))
+			throw new AccessDeniedException("You can only search for matches for your own account");
 
 		StudentDto student = studentClient.findStudent(studentId);
 		if (student == null) {
 			throw new NoSuchElementException("Student not found");
 		}
-
 		return matchingEngine.findMatches(student, criteria);
+	}
+
+	private static boolean isAdmin(Jwt jwt) {
+		List<String> roles = jwt.getClaimAsStringList("roles");
+		return roles != null && roles.contains("ROLE_ADMIN");
 	}
 
 	// Errors come back as {"message": ...}, the shape the frontend already shows to users.

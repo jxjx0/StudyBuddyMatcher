@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import {
   CalendarDays,
   Check,
@@ -21,12 +22,14 @@ const {
   error,
   loadConnectionsAndRequests,
   markConnectionUpdatesRead,
+  unreadConnectionUpdates,
   acceptMatchRequest,
   declineMatchRequest,
   cancelMatchRequest,
   endStudyConnection,
 } = useConnections();
 
+const router = useRouter();
 const connectionTab = ref("active");
 const requestTab = ref("incoming");
 const chatConnection = ref(null);
@@ -41,8 +44,64 @@ function initials(name) {
     .toUpperCase();
 }
 
+function selectTab(tab) {
+  connectionTab.value = tab;
+  if (tab === 'pending') {
+    markConnectionUpdatesRead();
+  }
+}
+
+function viewProfile(partnerId) {
+  if (partnerId) {
+    router.push({ name: "student-public-profile", query: { id: partnerId, from: "connections" } });
+  }
+}
+
+const endingConnectionIds = ref(new Set());
+async function handleEndConnection(connectionId) {
+  if (endingConnectionIds.value.has(connectionId)) return;
+  endingConnectionIds.value = new Set(endingConnectionIds.value).add(connectionId);
+  try {
+    await endStudyConnection(connectionId);
+  } finally {
+    const updated = new Set(endingConnectionIds.value);
+    updated.delete(connectionId);
+    endingConnectionIds.value = updated;
+  }
+}
+
+const processingRequestIds = ref(new Map());
+async function handleAccept(requestId) {
+  if (processingRequestIds.value.has(requestId)) return;
+  const updated = new Map(processingRequestIds.value);
+  updated.set(requestId, 'accept');
+  processingRequestIds.value = updated;
+  try {
+    await acceptMatchRequest(requestId);
+  } finally {
+    const next = new Map(processingRequestIds.value);
+    next.delete(requestId);
+    processingRequestIds.value = next;
+  }
+}
+
+async function handleDecline(requestId) {
+  if (processingRequestIds.value.has(requestId)) return;
+  const updated = new Map(processingRequestIds.value);
+  updated.set(requestId, 'decline');
+  processingRequestIds.value = updated;
+  try {
+    await declineMatchRequest(requestId);
+  } finally {
+    const next = new Map(processingRequestIds.value);
+    next.delete(requestId);
+    processingRequestIds.value = next;
+  }
+}
+
 onMounted(async () => {
-  if (await loadConnectionsAndRequests()) markConnectionUpdatesRead();
+  await loadConnectionsAndRequests();
+  if (connectionTab.value === 'pending') markConnectionUpdatesRead();
 });
 </script>
 
@@ -59,7 +118,10 @@ onMounted(async () => {
         Try again
       </button>
     </div>
-    <p v-else-if="loading" role="status">Loading your connections…</p>
+    <div v-else-if="loading" class="loading-state" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>Loading your connections…</p>
+    </div>
     <template v-else>
       <div class="connection-tabs main-tabs" role="tablist" aria-label="Connection views">
         <button
@@ -69,7 +131,7 @@ onMounted(async () => {
           aria-controls="active-connections-panel"
           :aria-selected="connectionTab === 'active'"
           :aria-pressed="connectionTab === 'active'"
-          @click="connectionTab = 'active'"
+          @click="selectTab('active')"
         >
           Active connections <span class="tab-count">{{ activeConnections.length }}</span>
         </button>
@@ -80,10 +142,18 @@ onMounted(async () => {
           aria-controls="pending-requests-panel"
           :aria-selected="connectionTab === 'pending'"
           :aria-pressed="connectionTab === 'pending'"
-          @click="connectionTab = 'pending'"
+          @click="selectTab('pending')"
         >
           Pending requests
-          <span class="tab-count">{{ incomingRequests.length + outgoingRequests.length }}</span>
+          <span
+            v-if="unreadConnectionUpdates"
+            class="tab-notification-badge"
+            role="status"
+            :aria-label="`${unreadConnectionUpdates} unread pending requests`"
+          >
+            {{ unreadConnectionUpdates > 9 ? '9+' : unreadConnectionUpdates }}
+          </span>
+          <span v-else class="tab-count">{{ incomingRequests.length + outgoingRequests.length }}</span>
         </button>
       </div>
 
@@ -153,11 +223,18 @@ onMounted(async () => {
                 Chat
               </button>
               <button
-                class="secondary-button end-connection"
-                @click="endStudyConnection(connection.connectionId)"
+                class="secondary-button"
+                @click="viewProfile(connection.partnerId)"
+              >
+                View profile
+              </button>
+              <button
+                class="danger-button end-connection"
+                :disabled="endingConnectionIds.has(connection.connectionId)"
+                @click="handleEndConnection(connection.connectionId)"
               >
                 <X :size="16" aria-hidden="true" />
-                End connection
+                {{ endingConnectionIds.has(connection.connectionId) ? "Ending connection…" : "End connection" }}
               </button>
             </div>
           </article>
@@ -208,7 +285,15 @@ onMounted(async () => {
                 </div>
                 <div class="request-info">
                   <div class="request-heading">
-                    <h2>{{ request.senderName || "A student" }}</h2>
+                    <h2>
+                      <button
+                        type="button"
+                        class="person-name-link"
+                        @click="viewProfile(request.senderId)"
+                      >
+                        {{ request.senderName || "A student" }}
+                      </button>
+                    </h2>
                     <span class="tag request-status">Received</span>
                   </div>
                   <p v-if="request.message" class="request-message">
@@ -221,11 +306,21 @@ onMounted(async () => {
                 </div>
               </div>
               <div class="request-actions">
-                <button class="primary-button" @click="acceptMatchRequest(request.requestId)">
-                  <Check :size="16" aria-hidden="true" /> Accept
+                <button
+                  class="primary-button"
+                  :disabled="Boolean(processingRequestIds.get(request.requestId))"
+                  @click="handleAccept(request.requestId)"
+                >
+                  <Check :size="16" aria-hidden="true" />
+                  {{ processingRequestIds.get(request.requestId) === 'accept' ? "Accepting…" : "Accept" }}
                 </button>
-                <button class="secondary-button" @click="declineMatchRequest(request.requestId)">
-                  <X :size="16" aria-hidden="true" /> Decline
+                <button
+                  class="secondary-button"
+                  :disabled="Boolean(processingRequestIds.get(request.requestId))"
+                  @click="handleDecline(request.requestId)"
+                >
+                  <X :size="16" aria-hidden="true" />
+                  {{ processingRequestIds.get(request.requestId) === 'decline' ? "Declining…" : "Decline" }}
                 </button>
               </div>
             </article>
@@ -249,7 +344,15 @@ onMounted(async () => {
                 </div>
                 <div class="request-info">
                   <div class="request-heading">
-                    <h2>{{ request.recipientName || "A student" }}</h2>
+                    <h2>
+                      <button
+                        type="button"
+                        class="person-name-link"
+                        @click="viewProfile(request.recipientId)"
+                      >
+                        {{ request.recipientName || "A student" }}
+                      </button>
+                    </h2>
                     <span class="tag request-status">Awaiting response</span>
                   </div>
                   <p v-if="request.message" class="request-message">
@@ -289,6 +392,34 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.loading-state p {
+  margin: 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .connection-list {
   display: grid;
   gap: 14px;
@@ -322,6 +453,21 @@ onMounted(async () => {
   color: #963e2c;
 }
 
+
+.tab-notification-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .tab-count {
   display: inline-grid;
   place-items: center;
@@ -347,7 +493,7 @@ onMounted(async () => {
 }
 
 .connection-card {
-  grid-template-columns: minmax(200px, 0.85fr) minmax(240px, 1.15fr) auto;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1.2fr) auto;
 }
 
 .connection-actions {
@@ -369,6 +515,32 @@ onMounted(async () => {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+
+.person-name-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-heading, #2c2523);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: underline;
+  text-decoration-color: #d1c7bd;
+  text-underline-offset: 4px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.person-name-link:hover,
+.person-name-link:focus-visible {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
 .connection-person,
 .request-main {
   display: flex;
@@ -382,10 +554,18 @@ onMounted(async () => {
   min-width: 0;
 }
 
-.connection-person-info h2,
-.request-heading h2 {
+.connection-person-info h2 {
   margin: 0 0 6px;
   font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.request-heading h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.1rem;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
@@ -423,6 +603,14 @@ onMounted(async () => {
 .connection-date svg,
 .request-date svg {
   flex: 0 0 auto;
+}
+
+.connection-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .end-connection {
@@ -523,10 +711,11 @@ onMounted(async () => {
     grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr);
   }
 
-  .end-connection,
+  .connection-actions,
   .request-actions {
     grid-column: 2;
     justify-self: start;
+    flex-direction: row;
   }
 
   .connection-actions {
@@ -569,10 +758,8 @@ onMounted(async () => {
   .request-actions {
     grid-column: auto;
     justify-self: stretch;
-  }
-
-  .connection-actions button {
-    flex: 1 1 140px;
+    justify-content: flex-start;
+    flex-direction: column;
   }
 }
 </style>
