@@ -76,6 +76,13 @@ public class ConnectionController {
 		return ResponseEntity.noContent().build();
 	}
 
+	@DeleteMapping("/{connectionId}/chat")
+	public ResponseEntity<Void> deleteChat(@PathVariable String connectionId,
+										   @AuthenticationPrincipal Jwt jwt) {
+		chatService.deleteForStudent(connectionId, jwt.getClaimAsString("uid"));
+		return ResponseEntity.noContent().build();
+	}
+
 	@DeleteMapping("/{connectionId}")
 	public ResponseEntity<Void> end(@PathVariable String connectionId,
 									@RequestParam(required = false) String requesterId,

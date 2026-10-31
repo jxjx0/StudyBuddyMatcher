@@ -1,10 +1,12 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, MessageCircle } from "lucide-vue-next";
+import { ArrowLeft, MessageCircle, Trash2 } from "lucide-vue-next";
 import { useConnections } from "../../composables/useConnections";
 import { useChat } from "../../composables/useChat";
 import { useAppState } from "../../composables/useAppState";
+import { api } from "../../services/api";
+import AppDialog from "../../components/AppDialog.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -20,29 +22,72 @@ const {
   currentStudentId,
   openConversation,
   sendMessage,
+  deleteChat,
+  loadSummaries,
 } = useChat();
 
 const draft = ref("");
 const sending = ref(false);
+const deletingChat = ref(false);
+const deleteConfirmationOpen = ref(false);
+const pendingDeleteConnectionId = ref(null);
 const messageList = ref(null);
 const loadingList = ref(!hasLoadedOnce.value);
+const archivedPartnerNames = ref({});
 
 const selectedId = computed(() => route.query.connection || null);
 
-// Every active connection is a conversation, newest activity first.
+watch(
+  () =>
+    summaries.value
+      .filter((summary) => !summary.active && summary.partnerId)
+      .map((summary) => summary.partnerId),
+  async (partnerIds) => {
+    const unknownIds = [...new Set(partnerIds)].filter(
+      (partnerId) => !(partnerId in archivedPartnerNames.value),
+    );
+    const profiles = await Promise.all(
+      unknownIds.map(async (partnerId) => {
+        try {
+          const profile = await api(`/api/students/${encodeURIComponent(partnerId)}`);
+          return [partnerId, profile.name || "Former Study Buddy"];
+        } catch (problem) {
+          if (problem.name === "AbortError") return null;
+          console.error("Could not load an archived chat participant.", problem);
+          return [partnerId, "Former Study Buddy"];
+        }
+      }),
+    );
+    archivedPartnerNames.value = {
+      ...archivedPartnerNames.value,
+      ...Object.fromEntries(profiles.filter(Boolean)),
+    };
+  },
+  { immediate: true },
+);
+
 const conversations = computed(() => {
   const byId = new Map(summaries.value.map((summary) => [summary.connectionId, summary]));
-  return activeConnections.value
-    .map((connection) => {
-      const summary = byId.get(connection.connectionId);
-      return {
-        connectionId: connection.connectionId,
-        partnerName: connection.partnerName || "Study buddy",
-        lastMessage: summary?.lastMessage || null,
-        unreadCount: summary?.unreadCount || 0,
-        activityAt: summary?.lastMessage?.sentAt || connection.startedAt,
-      };
-    })
+  const active = activeConnections.value.flatMap((connection) => {
+    const summary = byId.get(connection.connectionId);
+    if (summary?.hidden && selectedId.value !== connection.connectionId) return [];
+    return [{
+      connectionId: connection.connectionId,
+      partnerName: connection.partnerName || "Study buddy",
+      active: true,
+      lastMessage: summary?.lastMessage || null,
+      unreadCount: summary?.unreadCount || 0,
+      activityAt: summary?.lastMessage?.sentAt || connection.startedAt,
+    }];
+  });
+  const ended = summaries.value
+    .filter((summary) => !summary.active && !summary.hidden)
+    .map((summary) => ({
+      ...summary,
+      partnerName: archivedPartnerNames.value[summary.partnerId] || "Former Study Buddy",
+      activityAt: summary.lastMessage?.sentAt,
+    }));
+  return [...active, ...ended]
     .sort((a, b) => new Date(b.activityAt) - new Date(a.activityAt));
 });
 
@@ -92,6 +137,27 @@ async function submit() {
   }
 }
 
+function confirmDeleteChat() {
+  if (!selected.value || deletingChat.value) return;
+  pendingDeleteConnectionId.value = selected.value.connectionId;
+  deleteConfirmationOpen.value = true;
+}
+
+async function deleteChatFromHistory() {
+  const connectionId = pendingDeleteConnectionId.value;
+  if (!connectionId || deletingChat.value) return;
+  deletingChat.value = true;
+  try {
+    if (await deleteChat(connectionId)) {
+      deleteConfirmationOpen.value = false;
+      pendingDeleteConnectionId.value = null;
+      selectConversation(null);
+    }
+  } finally {
+    deletingChat.value = false;
+  }
+}
+
 function submitOnEnter(event) {
   if (event.isComposing || event.shiftKey) return;
   event.preventDefault();
@@ -105,7 +171,10 @@ watch(selectedId, (connectionId) => {
 watch(() => messages.value.length, scrollToLatest);
 
 onMounted(async () => {
-  await loadConnectionsAndRequests({ silent: hasLoadedOnce.value });
+  await Promise.all([
+    loadConnectionsAndRequests({ silent: hasLoadedOnce.value }),
+    loadSummaries(),
+  ]);
   loadingList.value = false;
 });
 onUnmounted(() => openConversation(null));
@@ -123,7 +192,7 @@ onUnmounted(() => openConversation(null));
       </div>
       <div v-else-if="!conversations.length" class="conversation-empty">
         <MessageCircle :size="28" aria-hidden="true" />
-        <p>Connect with a study buddy to start chatting.</p>
+        <p>No conversations to show. Start or reopen a chat from My Connections.</p>
         <RouterLink class="secondary-button" :to="{ name: 'student-discover' }">
           Discover buddies
         </RouterLink>
@@ -145,6 +214,7 @@ onUnmounted(() => openConversation(null));
             <span class="conversation-text">
               <span class="conversation-top">
                 <strong>{{ conversation.partnerName }}</strong>
+                <span v-if="!conversation.active" class="archived-badge">Ended</span>
                 <time
                   v-if="conversation.lastMessage"
                   :datetime="conversation.lastMessage.sentAt"
@@ -188,9 +258,25 @@ onUnmounted(() => openConversation(null));
           <div>
             <h2>{{ selected.partnerName }}</h2>
             <p class="conversation-status" role="status">
-              {{ connected ? "Connected" : "Connecting…" }}
+              {{
+                selected.active
+                  ? connected
+                    ? "Connected"
+                    : "Connecting…"
+                  : "Connection ended · read-only"
+              }}
             </p>
           </div>
+          <button
+            type="button"
+            class="icon-button chat-delete-button"
+            aria-label="Delete chat"
+            title="Delete chat"
+            :disabled="deletingChat"
+            @click="confirmDeleteChat"
+          >
+            <Trash2 :size="18" aria-hidden="true" />
+          </button>
         </header>
 
         <div ref="messageList" class="message-list" aria-live="polite">
@@ -198,7 +284,11 @@ onUnmounted(() => openConversation(null));
             Loading conversation…
           </p>
           <p v-else-if="!messages.length" class="message-empty">
-            No messages yet. Say hi to {{ selected.partnerName }}!
+            {{
+              selected.active
+                ? `No messages yet. Say hi to ${selected.partnerName}!`
+                : "No messages to show."
+            }}
           </p>
           <article
             v-for="message in messages"
@@ -214,7 +304,10 @@ onUnmounted(() => openConversation(null));
         </div>
 
         <p v-if="error" class="error-message chat-error" role="alert">{{ error }}</p>
-        <form class="composer" @submit.prevent="submit">
+        <p v-if="!selected.active" class="read-only-notice" role="status">
+          This connection has ended. You can read the conversation, but cannot send messages.
+        </p>
+        <form v-else class="composer" @submit.prevent="submit">
           <label class="visually-hidden" for="chat-draft">Message</label>
           <textarea
             id="chat-draft"
@@ -237,6 +330,37 @@ onUnmounted(() => openConversation(null));
       </template>
     </div>
   </section>
+  <AppDialog
+    :open="deleteConfirmationOpen"
+    title="Delete chat?"
+    :busy="deletingChat"
+    close-label="Cancel chat deletion"
+    @close="deleteConfirmationOpen = false"
+  >
+    <p>
+      This hides the conversation from your history. The other student's copy
+      will remain, and any new messages will make the chat visible again.
+    </p>
+    <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+    <div class="dialog-footer">
+      <button
+        type="button"
+        class="secondary-button"
+        :disabled="deletingChat"
+        @click="deleteConfirmationOpen = false"
+      >
+        Keep chat
+      </button>
+      <button
+        type="button"
+        class="danger-button"
+        :disabled="deletingChat"
+        @click="deleteChatFromHistory"
+      >
+        {{ deletingChat ? "Deleting…" : "Delete chat" }}
+      </button>
+    </div>
+  </AppDialog>
 </template>
 
 <style scoped>
@@ -356,6 +480,16 @@ onUnmounted(() => openConversation(null));
   font-size: 0.75rem;
 }
 
+.archived-badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
 .conversation-preview {
   overflow: hidden;
   color: var(--muted);
@@ -443,6 +577,15 @@ onUnmounted(() => openConversation(null));
   font-size: 0.8rem;
 }
 
+.chat-delete-button {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.chat-delete-button:hover:not(:disabled) {
+  color: #a33232;
+}
+
 .conversation-back {
   display: none;
 }
@@ -504,6 +647,15 @@ onUnmounted(() => openConversation(null));
   margin: 0 20px 8px;
 }
 
+.read-only-notice {
+  margin: 0;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  text-align: center;
+}
+
 .composer {
   display: flex;
   align-items: flex-end;
@@ -562,7 +714,8 @@ onUnmounted(() => openConversation(null));
 
   .conversation-header,
   .message-list,
-  .composer {
+  .composer,
+  .read-only-notice {
     padding-right: 16px;
     padding-left: 16px;
   }

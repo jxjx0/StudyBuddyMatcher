@@ -1,8 +1,8 @@
 # Student chat
 
-This document describes the real-time chat available to students with an active
-study buddy connection: the Java classes involved, the user-facing flow, and
-how messages move between the frontend, connection-service, and PostgreSQL.
+This document describes student chat: the Java classes involved, the
+user-facing flow, and how messages move between the frontend,
+connection-service, and PostgreSQL.
 
 ## How students use chat
 
@@ -10,19 +10,23 @@ how messages move between the frontend, connection-service, and PostgreSQL.
    and authenticates its STOMP session with the student's bearer JWT. It
    subscribes to the live topic of every active connection, so unread badges
    update on any page.
-2. The **Messages** tab lists every active connection with its latest message
-   and unread count, newest activity first. The nav item shows the total
-   unread count. **Chat** on a My Connections card opens that conversation.
-3. Opening a conversation loads its latest 100 messages and marks it read.
-   New messages are displayed immediately for both connected students.
+2. The **Messages** tab lists active chats and ended connections that have
+   visible history, newest activity first. Ended chats are marked read-only.
+   The nav item shows the total unread count. **Chat** on a My Connections
+   card opens that conversation.
+3. Opening a conversation loads its latest 100 messages. Active conversations
+   are marked read, and new messages are displayed immediately for both
+   connected students.
 4. A typed message stays in the box until the server broadcasts it back, so a
    rejected send shows an error instead of losing the text. Messages are
    limited to 2,000 characters.
 
-Only active connections can read history, subscribe to a conversation, or send
-messages. Ending a connection disables chat access. Saved messages remain in
-the database unless the connection row is deleted (the chat-message foreign
-key cascades on deletion).
+Students in a connection can read its history after it ends, but only active
+connections can subscribe or send messages. Ending a connection disables
+communication without deleting saved messages. Students can delete a chat from
+their own history; this hides messages sent up to that point only for that
+student, while the other student's history remains unchanged. Later messages
+make the chat visible again. Deleting a chat does not end an active connection.
 
 ## Java classes
 
@@ -34,10 +38,10 @@ All Java paths below are relative to
 | `config/ChatWebSocketConfiguration.java` | Enables Spring's STOMP-over-WebSocket support; registers `/ws`; configures `/app` application destinations and `/topic` broadcasts; installs the chat inbound interceptor; configures allowed browser origins and a dedicated heartbeat scheduler. |
 | `config/ChatAuthenticationInterceptor.java` | Validates the bearer JWT on STOMP `CONNECT`, requires the student role, and binds the JWT `uid` to the WebSocket `Principal`. Before subscription, it checks that the principal belongs to the active connection. It also restricts client `SEND` messages to the supported chat destination. |
 | `controller/ChatController.java` | Receives STOMP sends at `/app/connections/{connectionId}/send`, asks `ChatService` to authorize and persist the message, then broadcasts the saved message to `/topic/connections/{connectionId}`. |
-| `controller/ConnectionController.java` | Exposes `GET /api/connections/{connectionId}/messages` (conversation history), `GET /api/connections/chats` (the student's conversations with latest message and unread count), and `POST /api/connections/{connectionId}/read` (mark a conversation read), all using the authenticated JWT identity. |
-| `service/ChatService.java` | Applies chat business rules: validates UUIDs and message contents, checks that the connection is active and includes the requesting student, and coordinates history reads, read tracking, and message persistence. |
-| `repository/ChatMessageRepository.java` | Uses Spring `JdbcTemplate` to insert chat messages, fetch the latest 100 messages in chronological order, build the conversation list with unread counts, and record when a student last read a conversation. |
-| `dto/ChatSummary.java` | One conversation in the chat list: connection ID, latest message (or null), and unread count. |
+| `controller/ConnectionController.java` | Exposes `GET /api/connections/{connectionId}/messages` (history), `GET /api/connections/chats` (visible conversations and unread counts), `POST /api/connections/{connectionId}/read` (mark read), and `DELETE /api/connections/{connectionId}/chat` (hide this student's history), all using the authenticated JWT identity. |
+| `service/ChatService.java` | Applies chat business rules: validates UUIDs and message contents, checks participant membership for history and deletion, requires active membership for read tracking and sending, and coordinates persistence. |
+| `repository/ChatMessageRepository.java` | Uses Spring `JdbcTemplate` to insert chat messages, fetch the latest 100 visible messages in chronological order, build the conversation list with unread counts, record per-student deletion timestamps, and record when a student last read a conversation. |
+| `dto/ChatSummary.java` | One conversation in the chat list: connection and partner IDs, active/hidden state, latest message (or null), and unread count. |
 | `dto/SendChatMessageRequest.java` | Validates incoming message content as nonblank and no longer than 2,000 characters. |
 | `dto/ChatMessage.java` | Defines the saved message returned by the repository and broadcast to subscribers: message ID, connection ID, sender ID, content, and timestamp. |
 | `repository/StudyBuddyConnectionRepository.java` and `model/StudyBuddyConnection.java` | Supply the connection record used by `ChatService` to verify active status and participant membership. |
@@ -62,6 +66,11 @@ A message is unread when the partner sent it after the student's
 table already exists in the shared Supabase database; no migration file in this
 repository creates it.
 
+The `connection_chat_deletions` table stores a per-student history cutoff.
+History and summaries only include messages sent after that cutoff. A new
+message makes the chat visible again, while the other participant's cutoff and
+history remain unchanged.
+
 Migration 003 enables row-level security and revokes access from browser roles.
 The Vue app does not connect to Supabase directly. Instead, connection-service
 uses its configured server-side JDBC datasource (`SUPABASE_JDBC_URL`,
@@ -76,7 +85,7 @@ MessagesPage.vue (useChat.js)
   -> ConnectionController.findMessages()
   -> ChatService.history(connectionId, JWT uid)
   -> StudyBuddyConnectionRepository.findById()
-  -> verify active connection and participant
+  -> verify connection participant
   -> ChatMessageRepository.findRecent()
   -> JdbcTemplate SELECT from connection_chat_messages (latest 100)
   -> ChatMessage DTO list returned to the Messages page
@@ -113,9 +122,10 @@ useChat.js
      sent after connection_chat_reads.last_read_at
 ```
 
-Opening a conversation, or receiving a message while it is open, calls
+Opening an active conversation, or receiving a message while it is open, calls
 `POST /api/connections/{connectionId}/read`, which upserts the student's
-`last_read_at` to the current database time.
+`last_read_at` to the current database time. Ended conversations remain
+readable but do not update unread state.
 
 The server saves before broadcasting. The broadcast therefore contains the
 database-assigned timestamp and generated message ID. During history loading,
@@ -131,11 +141,14 @@ arrives at the same time as the history response.
   interceptor calls `ChatService` to verify active membership.
 - Sending is checked again in `ChatService` before persistence. The sender ID
   comes from the STOMP principal, never from the request payload.
-- The HTTP history and mark-read endpoints also use the authenticated JWT
-  `uid` and perform the same active-membership check. The chat list only
-  returns the student's own active connections.
-- The service returns a not-found response for missing, ended, or unrelated
+- The HTTP history and delete endpoints use the authenticated JWT `uid` and
+  verify participant membership. Mark-read, sending, and STOMP subscriptions
+  additionally require the connection to remain active.
+- The service returns a not-found response for missing or unrelated
   connections so chat data is not exposed to nonparticipants.
+- Delete is scoped to the requesting student through
+  `connection_chat_deletions`; it sets a history cutoff and does not delete
+  messages or affect the partner's view.
 
 ## Routing and configuration
 
@@ -160,8 +173,10 @@ arrives at the same time as the history response.
 
 Apply migration 003 once in the Supabase SQL Editor using a database-owner
 connection. The application runtime should use its backend JDBC credentials,
-not the database-owner credentials. The connection-service setup and
-environment variables are documented in
+not the database-owner credentials. Apply
+[`migrations/004_create_chat_deletions.sql`](./migrations/004_create_chat_deletions.sql)
+once as well to enable per-student chat deletion. The connection-service setup
+and environment variables are documented in
 [`README.md`](./README.md).
 
 ## Related implementation

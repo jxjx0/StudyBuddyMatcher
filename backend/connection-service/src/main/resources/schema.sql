@@ -46,3 +46,11 @@ CREATE TABLE IF NOT EXISTS connection_chat_messages (
 
 CREATE INDEX IF NOT EXISTS connection_chat_messages_by_connection
 ON connection_chat_messages (connection_id, sent_at DESC, message_id);
+
+CREATE TABLE IF NOT EXISTS connection_chat_deletions (
+    connection_id UUID NOT NULL
+        REFERENCES study_buddy_connections (connection_id) ON DELETE CASCADE,
+    student_id UUID NOT NULL,
+    deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (connection_id, student_id)
+);

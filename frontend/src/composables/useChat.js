@@ -68,7 +68,8 @@ function receive(message) {
     }
   }
 
-  if (!summaries.value.some((summary) => summary.connectionId === connectionId)) {
+  const summary = summaries.value.find((item) => item.connectionId === connectionId);
+  if (!summary || summary.hidden) {
     void loadSummaries();
     return;
   }
@@ -85,7 +86,11 @@ function receive(message) {
 
 function syncSubscriptions() {
   if (!client?.connected) return;
-  const wanted = new Set(summaries.value.map((summary) => summary.connectionId));
+  const wanted = new Set(
+    summaries.value
+      .filter((summary) => summary.active)
+      .map((summary) => summary.connectionId),
+  );
   for (const [connectionId, subscription] of subscriptions) {
     if (!wanted.has(connectionId)) {
       subscription.unsubscribe();
@@ -153,7 +158,8 @@ function openConversation(connectionId) {
   error.value = "";
   if (!connectionId) return;
   void loadHistory(connectionId);
-  void markRead(connectionId);
+  const summary = summaries.value.find((item) => item.connectionId === connectionId);
+  if (summary?.active) void markRead(connectionId);
 }
 
 /** Resolves true once the server echoes the message back, false if it never arrives. */
@@ -178,7 +184,26 @@ function onVisibilityChange() {
   const connectionId = openConnectionId.value;
   if (!connectionId || document.visibilityState !== "visible") return;
   const summary = summaries.value.find((item) => item.connectionId === connectionId);
-  if (summary?.unreadCount) void markRead(connectionId);
+  if (summary?.active && summary.unreadCount) void markRead(connectionId);
+}
+
+async function deleteChat(connectionId) {
+  try {
+    await api(`/api/connections/${connectionId}/chat`, { method: "DELETE" });
+    const remaining = { ...messagesByConnection.value };
+    delete remaining[connectionId];
+    messagesByConnection.value = remaining;
+    summaries.value = summaries.value.map((summary) =>
+      summary.connectionId === connectionId
+        ? { ...summary, hidden: true, lastMessage: null, unreadCount: 0 }
+        : summary,
+    );
+    await loadSummaries();
+    return true;
+  } catch (problem) {
+    if (problem.name !== "AbortError") error.value = problem.message;
+    return false;
+  }
 }
 
 function startChat() {
@@ -257,5 +282,6 @@ export function useChat() {
     loadSummaries,
     openConversation,
     sendMessage,
+    deleteChat,
   };
 }
