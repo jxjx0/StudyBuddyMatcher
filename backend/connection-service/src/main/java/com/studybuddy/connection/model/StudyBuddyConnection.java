@@ -1,6 +1,7 @@
 package com.studybuddy.connection.model;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
  * An accepted study buddy relationship between two students.
@@ -64,6 +65,12 @@ public class StudyBuddyConnection {
 	public void end() {
 		this.active = false;
 		this.endedAt = LocalDateTime.now();
+	}
+
+	public void reopen() {
+		this.active = true;
+		this.startedAt = LocalDateTime.now(ZoneId.systemDefault());
+		this.endedAt = null;
 	}
 
 	public boolean isActive() {

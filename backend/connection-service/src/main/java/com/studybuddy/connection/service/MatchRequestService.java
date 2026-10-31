@@ -142,6 +142,16 @@ public class MatchRequestService {
 	}
 
 	private StudyBuddyConnection createConnection(String studentAId, String studentBId) {
+		StudyBuddyConnection existingConnection =
+				connectionRepository.findLatestByParticipants(studentAId, studentBId).orElse(null);
+		if (existingConnection != null) {
+			if (!existingConnection.isActive()) {
+				existingConnection.reopen();
+				connectionRepository.save(existingConnection);
+			}
+			return existingConnection;
+		}
+
 		StudyBuddyConnection connection = new StudyBuddyConnection();
 		connection.setStudentAId(studentAId);
 		connection.setStudentBId(studentBId);

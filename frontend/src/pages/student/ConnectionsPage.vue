@@ -17,6 +17,7 @@ const {
   outgoingRequests,
   activeConnections,
   loading,
+  hasLoadedOnce,
   cancellingRequestIds,
   error,
   loadConnectionsAndRequests,
@@ -98,7 +99,9 @@ async function handleDecline(requestId) {
 }
 
 onMounted(async () => {
-  await loadConnectionsAndRequests();
+  if (!hasLoadedOnce.value && !loading.value) {
+    await loadConnectionsAndRequests();
+  }
   if (connectionTab.value === 'pending') markConnectionUpdatesRead();
 });
 </script>

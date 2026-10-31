@@ -13,6 +13,7 @@ const {
   loadConnectionsAndRequests,
   checkForConnectionUpdates,
   markConnectionUpdatesRead,
+  loading: connectionsLoading,
 } = useConnections();
 const { startChat, loadSummaries, connected: chatConnected } = useChat();
 const route = useRoute();
@@ -51,7 +52,9 @@ async function refreshConnectionUpdates() {
     // Until chat connects, connecting loads the list itself.
     if (chatConnected.value) void loadSummaries();
     if (["/student/connections", "/student/messages"].includes(route.path)) {
-      await loadConnectionsAndRequests({ silent: true });
+      if (!connectionsLoading.value) {
+        await loadConnectionsAndRequests({ silent: true });
+      }
     } else {
       await checkForConnectionUpdates();
     }

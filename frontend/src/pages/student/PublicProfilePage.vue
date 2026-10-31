@@ -5,6 +5,7 @@ import { Check, X } from "lucide-vue-next";
 import { useAppState } from "../../composables/useAppState";
 import { useConnections } from "../../composables/useConnections";
 import ConnectionRequestDialog from "../../components/ConnectionRequestDialog.vue";
+import AppDialog from "../../components/AppDialog.vue";
 const { loadPublicProfile, user } = useAppState();
 const {
   incomingRequests,
@@ -15,6 +16,7 @@ const {
   acceptMatchRequest,
   declineMatchRequest,
   loadConnectionsAndRequests,
+  endStudyConnection,
 } = useConnections();
 const route = useRoute();
 const router = useRouter();
@@ -26,17 +28,24 @@ const sending = ref(false);
 const cancelling = ref(false);
 const justSent = ref(false);
 const requestDialogOpen = ref(false);
+const endConfirmationOpen = ref(false);
+const endingConnection = ref(false);
 let controller;
+
+const activeConnection = computed(() => {
+  const profileId = selectedProfile.value?.id;
+  if (!profileId) return null;
+  return activeConnections.value.find(
+    (connection) =>
+      connection.studentAId === profileId || connection.studentBId === profileId,
+  ) || null;
+});
 
 const connectionStatus = computed(() => {
   const profileId = selectedProfile.value?.id;
   if (!profileId) return "Connect";
   if (user.value?.userId === profileId) return "Self";
-  if (
-    activeConnections.value.some(
-      (conn) => conn.studentAId === profileId || conn.studentBId === profileId,
-    )
-  ) {
+  if (activeConnection.value) {
     return "Connected";
   }
   if (
@@ -112,6 +121,18 @@ function handlePrimaryAction() {
   else if (connectionStatus.value === "Request Sent") void handleCancel();
 }
 
+async function handleEndConnection() {
+  if (!activeConnection.value || endingConnection.value) return;
+  endingConnection.value = true;
+  try {
+    if (await endStudyConnection(activeConnection.value.connectionId)) {
+      endConfirmationOpen.value = false;
+    }
+  } finally {
+    endingConnection.value = false;
+  }
+}
+
 async function load() {
   controller?.abort();
   controller = new AbortController();
@@ -174,7 +195,12 @@ onScopeDispose(() => controller?.abort());
           {{ selectedProfile.initials }}
         </div>
         <div>
-          <h2>{{ selectedProfile.name }}</h2>
+          <div class="profile-name-row">
+            <h2>{{ selectedProfile.name }}</h2>
+            <span v-if="connectionStatus === 'Connected'" class="tag tag-success">
+              Connected
+            </span>
+          </div>
           <p>{{ selectedProfile.programme }}</p>
         </div>
       </div>
@@ -208,7 +234,17 @@ onScopeDispose(() => controller?.abort());
         Contact details remain private until your connection is accepted.
       </p>
       <div class="form-actions">
-        <template v-if="incomingRequest">
+        <template v-if="connectionStatus === 'Connected'">
+          <button
+            type="button"
+            class="danger-button"
+            :disabled="endingConnection"
+            @click="endConfirmationOpen = true"
+          >
+            {{ endingConnection ? "Ending connection…" : "End connection" }}
+          </button>
+        </template>
+        <template v-if="incomingRequest && connectionStatus !== 'Connected'">
           <button
             class="primary-button"
             :disabled="Boolean(respondingAction)"
@@ -227,7 +263,7 @@ onScopeDispose(() => controller?.abort());
           </button>
         </template>
         <button
-          v-else-if="connectionStatus !== 'Self'"
+          v-else-if="connectionStatus !== 'Self' && connectionStatus !== 'Connected'"
           class="primary-button"
           :disabled="sending || cancelling || !['Connect', 'Request Sent'].includes(connectionStatus)"
           :aria-label="
@@ -247,10 +283,52 @@ onScopeDispose(() => controller?.abort());
       @close="requestDialogOpen = false"
       @send="handleConnect"
     />
+    <AppDialog
+      :open="endConfirmationOpen"
+      title="End connection?"
+      :busy="endingConnection"
+      close-label="Cancel ending connection"
+      @close="endConfirmationOpen = false"
+    >
+      <p>
+        End your study-buddy connection with {{ selectedProfile?.name }}?
+        You can still read your chat history, but neither of you will be able
+        to send messages unless you reconnect.
+      </p>
+      <div class="dialog-footer">
+        <button
+          type="button"
+          class="secondary-button"
+          :disabled="endingConnection"
+          @click="endConfirmationOpen = false"
+        >
+          Keep connection
+        </button>
+        <button
+          type="button"
+          class="danger-button"
+          :disabled="endingConnection"
+          @click="handleEndConnection"
+        >
+          {{ endingConnection ? "Ending…" : "End connection" }}
+        </button>
+      </div>
+    </AppDialog>
   </section>
 </template>
 
 <style scoped>
+.profile-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.profile-name-row h2 {
+  margin-bottom: 5px;
+}
+
 .loading-state {
   display: flex;
   align-items: center;

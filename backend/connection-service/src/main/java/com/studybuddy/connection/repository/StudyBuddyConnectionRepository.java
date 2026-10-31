@@ -8,7 +8,6 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -72,6 +71,33 @@ public class StudyBuddyConnectionRepository {
 		}
 	}
 
+	public Optional<StudyBuddyConnection> findLatestByParticipants(String firstStudentId,
+																   String secondStudentId) {
+		if (firstStudentId == null || secondStudentId == null) return Optional.empty();
+		try {
+			UUID firstId = UUID.fromString(firstStudentId);
+			UUID secondId = UUID.fromString(secondStudentId);
+			List<StudyBuddyConnection> results = jdbcTemplate.query(
+					"""
+					SELECT connection_id, student_a_id, student_b_id, started_at, ended_at, active
+					FROM study_buddy_connections
+					WHERE (student_a_id = ? AND student_b_id = ?)
+					   OR (student_a_id = ? AND student_b_id = ?)
+					ORDER BY active DESC, started_at DESC
+					LIMIT 1
+					""",
+					rowMapper,
+					firstId,
+					secondId,
+					secondId,
+					firstId
+			);
+			return results.stream().findFirst();
+		} catch (IllegalArgumentException e) {
+			return Optional.empty();
+		}
+	}
+
 	public List<StudyBuddyConnection> findActiveByStudentId(String studentId) {
 		if (studentId == null) return List.of();
 		try {
@@ -101,7 +127,8 @@ public class StudyBuddyConnectionRepository {
 				INSERT INTO study_buddy_connections (connection_id, student_a_id, student_b_id, started_at, ended_at, active)
 				VALUES (?, ?, ?, ?, ?, ?)
 				ON CONFLICT (connection_id) DO UPDATE
-				SET active = EXCLUDED.active,
+				SET started_at = EXCLUDED.started_at,
+				    active = EXCLUDED.active,
 				    ended_at = EXCLUDED.ended_at
 				""",
 				UUID.fromString(connection.getConnectionId()),
