@@ -34,6 +34,9 @@ public class MatchingEngine {
 
 	private static final Logger log = LoggerFactory.getLogger(MatchingEngine.class);
 
+	// Candidates scoring below 1% are not real matches, so they are left out of the results.
+	private static final double MIN_MATCH_SCORE = 1.0;
+
 	// The UML shows currentConfig as a field. It is read into a local variable on
 	// each search instead: Spring shares one MatchingEngine across all requests,
 	// so a field would let two simultaneous searches overwrite each other's config.
@@ -81,6 +84,9 @@ public class MatchingEngine {
 			}
 			Map<CriterionType, Double> components = scoreComponents(student, candidate);
 			double score = weightedScore(components, weights);
+			if (score < MIN_MATCH_SCORE) {
+				continue;
+			}
 			results.add(new MatchResult(candidate, round(score), matchedCriteria(components, weights)));
 		}
 		results.sort(Comparator.comparingDouble(MatchResult::getScore).reversed());

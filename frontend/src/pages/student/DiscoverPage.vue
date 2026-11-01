@@ -394,16 +394,20 @@ onBeforeRouteLeave(() => {
           <h2>No matches found</h2>
           <p>
             Try removing a filter, or add courses and availability to your
-            profile so we can find better matches.
+            profile so we can find better matches. Alternatively, browse all
+            students here.
           </p>
+          <button class="secondary-button" @click="tab = 'browse'">
+            Browse all students
+          </button>
         </template>
         <template v-else>
           <h2>No students found</h2>
           <p>Try a different name, or reset your filters to see everyone.</p>
+          <button class="secondary-button" @click="resetFilters">
+            Reset filters
+          </button>
         </template>
-        <button class="secondary-button" @click="resetFilters">
-          Reset filters
-        </button>
       </div>
       <div v-else class="student-list">
         <article
