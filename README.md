@@ -387,6 +387,6 @@ StudyBuddyMatcher/
 | [backend/user-service/README.md](backend/user-service/README.md) | Account model and inheritance, JWT claims, profile and admin APIs, seeding |
 | [backend/matching-service/README.md](backend/matching-service/README.md) | How the match percentage is calculated, criteria, strategies, the engine's classes |
 | [backend/connection-service/README.md](backend/connection-service/README.md) | Match requests, connections, chat database and WebSocket configuration |
-| [backend/group-service/README.md](backend/group-service/README.md) | The leader role, group business rules, the manually applied schema |
+| [backend/group-service/README.md](backend/group-service/README.md) | The leader role, group business rules, the schema and its row-level security |
 | [backend/connection-service/CHAT_README.md](backend/connection-service/CHAT_README.md) | Class-by-class walkthrough of the chat feature with flow diagrams |
 | [CHANGES_README.md](CHANGES_README.md) | Log of connection-request and study-group changes |

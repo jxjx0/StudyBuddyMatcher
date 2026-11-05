@@ -14,7 +14,7 @@ spring:
       idle-timeout: 60000
   sql:
     init:
-      mode: never
+      mode: always
   application:
     name: group-service
 
