@@ -110,16 +110,12 @@ All require an admin JWT, enforced both at the gateway and here.
 |---|---|
 | `user_accounts` | Yes |
 | `courses` | Yes |
-| `students` | **No — see below** |
+| `students` | Yes |
 
 This service runs [`schema.sql`](src/main/resources/schema.sql) on **every**
 startup; the mode is fixed at `always` and `SPRING_SQL_INIT_MODE` does not
-change it. Both statements use `CREATE TABLE IF NOT EXISTS`, so this is safe
+change it. Every statement uses `CREATE TABLE IF NOT EXISTS`, so this is safe
 against a populated database.
-
-The student profile DDL is missing from that bootstrap, so a brand-new database
-needs the `students` table created by hand before profiles will work. See
-[Two tables are not created for you](../README.md#two-tables-are-not-created-for-you).
 
 Student profile fields are also mirrored into `user_accounts.profile_data` as
 JSONB, so the admin account screens can show profile information without

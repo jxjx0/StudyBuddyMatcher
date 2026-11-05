@@ -24,9 +24,8 @@ For the system overview, feature list and design principles, see the
    project reference.
 2. Copy [`.env.example`](.env.example) to `backend/.env` and fill in your
    values. `.env` is ignored by Git. Keep `sslmode=require` in the JDBC URL.
-3. On a brand-new database, create the `students` table and apply the group
-   schema — see [Schema initialization](#schema-initialization) below. Neither
-   is created automatically.
+3. No manual schema step is needed: each service creates its own tables on
+   startup — see [Schema initialization](#schema-initialization) below.
 
 ### Which port you connect on
 
@@ -147,39 +146,32 @@ service-role key in Vue/Vite variables or anywhere else the browser can read.
 
 ## Schema initialization
 
-Each service decides for itself whether to run its `schema.sql` on startup, and
-they do **not** all behave the same way. `SPRING_SQL_INIT_MODE` only changes
-connection-service; the others are fixed in their `application.yml`.
+Every service runs its own `schema.sql` on startup, so a brand-new database
+needs no manual setup.
+
+To switch this off, set `SPRING_SQL_INIT_MODE=never` as a real environment
+variable. Spring maps it onto `spring.sql.init.mode` for every service, which
+is how [`scripts/start-cloud.py`](../scripts/start-cloud.py) stops the services
+creating tables. Setting it only in `backend/.env` changes connection-service
+alone, because only connection-service reads `${SPRING_SQL_INIT_MODE}` in its
+`application.yml`.
 
 | Service | Runs `schema.sql` on startup? | Controlled by |
 |---|---|---|
 | user-service | Yes, always | Fixed (`mode: always`) |
 | matching-service | Yes, always | Fixed (`mode: always`) |
 | connection-service | Yes, unless you set `SPRING_SQL_INIT_MODE=never` | `${SPRING_SQL_INIT_MODE:always}` |
-| group-service | No, never | Fixed (`mode: never`) |
+| group-service | Yes, always | Fixed (`mode: always`) |
 
 Every `schema.sql` uses `CREATE TABLE IF NOT EXISTS`, so re-running against an
 already-populated database is safe and does not drop data.
 
-### Two tables are not created for you
-
-Setting up a brand-new database needs two manual steps. Both are already done
-on the team's shared Supabase database.
-
-**1. The `students` table.** user-service reads and writes `students`, but its
-`schema.sql` only creates `user_accounts` and `courses` — the student profile
-DDL is missing from the bootstrap. On an empty database, user-service starts but
-every profile operation fails. The column definitions are in
-[`scripts/group-local-students.sql`](../scripts/group-local-students.sql), which
-exists as a local test fixture; use it as the reference for the columns, but do
-not run that file against the shared database — it also inserts fixture courses.
-
-**2. The group-service tables.** Apply
-[`group-service/src/main/resources/schema.sql`](group-service/src/main/resources/schema.sql)
-once through the Supabase SQL Editor or a migration. It creates `study_groups`,
-`study_group_members` and `group_join_requests` with row-level security and no
-browser-role access, and it touches nothing else. Pushing the file to GitHub
-does not apply it to Supabase.
+group-service's schema also enables row-level security and revokes access from
+the Supabase browser roles (`anon`, `authenticated`) on its three tables, on
+every startup. Enabling row-level security is an owner-only operation, so the
+`SUPABASE_DB_USER` that group-service connects as must own `study_groups`,
+`study_group_members` and `group_join_requests`; otherwise group-service fails
+to start.
 
 ## Demo population
 

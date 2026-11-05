@@ -83,10 +83,12 @@ field was dropped before implementation, as recorded in
 
 ## Database
 
-Unlike the other services, this one **never** runs its schema automatically —
-`mode` is fixed at `never`. Apply
-[`src/main/resources/schema.sql`](src/main/resources/schema.sql) once through
-the Supabase SQL Editor or a migration, using a database-owner connection.
+Like user-service and matching-service, this service runs
+[`src/main/resources/schema.sql`](src/main/resources/schema.sql) on **every**
+startup; the mode is fixed at `always`. Every statement is safe to repeat
+(`IF NOT EXISTS`, idempotent `ALTER`/`REVOKE`), so this is safe against a
+populated database. The database user must own these tables, because enabling
+row-level security is an owner-only operation.
 
 It creates three tables and nothing else:
 

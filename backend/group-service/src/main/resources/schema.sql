@@ -1,5 +1,5 @@
--- Additive setup, run explicitly using the backend database owner. No cross-service foreign keys.
-BEGIN;
+-- Runs on every group-service startup (spring.sql.init.mode=always), so every statement must be safe to repeat.
+-- No cross-service foreign keys.
 CREATE TABLE IF NOT EXISTS study_groups (
  group_id uuid PRIMARY KEY, group_name varchar(100) NOT NULL CHECK (length(trim(group_name)) > 0),
  description varchar(2000) NOT NULL DEFAULT '', course_code varchar(32) NOT NULL, leader_id uuid NOT NULL,
@@ -30,13 +30,15 @@ ALTER TABLE study_group_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE group_join_requests ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON study_groups,study_group_members,group_join_requests FROM PUBLIC;
 -- Supabase roles are absent on plain local PostgreSQL. Never change existing tables' grants.
-DO $block$
+-- The DO body is single-quoted, not $$-quoted: Spring's script runner splits on ';' and only skips
+-- semicolons inside ordinary quotes, so a dollar-quoted body would be cut into broken pieces.
+DO '
 BEGIN
- IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN
+ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname=''anon'') THEN
   REVOKE ALL ON study_groups,study_group_members,group_join_requests FROM anon;
  END IF;
- IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN
+ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname=''authenticated'') THEN
   REVOKE ALL ON study_groups,study_group_members,group_join_requests FROM authenticated;
  END IF;
-END $block$;
-COMMIT;
+END
+';
