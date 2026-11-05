@@ -42,15 +42,19 @@ for StudyBuddyMatcher. It supplements the project setup instructions in
 The connection service uses the backend Supabase JDBC settings documented in
 [the connection-service README](./backend/connection-service/README.md).
 
-The service creates its tables on startup from
-[schema.sql](./backend/connection-service/src/main/resources/schema.sql),
-which permits the `CANCELLED` status.
+Unless `SPRING_SQL_INIT_MODE=never` is set, the service creates its tables on
+startup from
+[schema.sql](./backend/connection-service/src/main/resources/schema.sql).
+That file now permits the `CANCELLED` status and creates the chat and
+chat-deletion tables, so a fresh database needs no further steps.
 
 The reported HTTP 500 on request cancellation was caused by the database
-rejecting `CANCELLED` under its existing status constraint. For a
-`match_requests` table created before cancellation support, apply
-[002_allow_cancelled_match_requests.sql](./backend/connection-service/migrations/002_allow_cancelled_match_requests.sql)
-once in the Supabase SQL Editor. The shared Supabase database already has it.
+rejecting `CANCELLED` under the status constraint `match_requests` had at the
+time. The shared Supabase database has since been updated, and `schema.sql`
+carries the corrected constraint for any new database. A `match_requests` table
+created before cancellation support will keep its old constraint, because
+`CREATE TABLE IF NOT EXISTS` does not alter an existing table — widen that
+constraint by hand if you meet this on an old database.
 
 ## Study groups
 

@@ -1,75 +1,268 @@
-# StudyBuddyMatcher
+# Study Buddy Matcher System
 
-## Frontend
+IS442 Object Oriented Programming — team project.
 
-The frontend lives in [frontend/](frontend/) and is a Vue 3 + Vite app.
+A web application that helps university students find compatible peers for
+academic study and collaborative learning. Students build a study profile,
+search for buddies ranked by a configurable compatibility score, send and manage
+match requests, chat with their active buddies, and form study groups around a
+course. A system administrator manages user accounts and tunes the matching
+engine.
+
+## Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Design principles](#design-principles)
+- [Open source libraries](#open-source-libraries)
+- [Getting started](#getting-started)
+- [Running the application](#running-the-application)
+- [Demo data](#demo-data)
+- [Repository layout](#repository-layout)
+- [Further documentation](#further-documentation)
+
+## Features
+
+### Students
+
+**Profile and study preference management** — [`ProfilePage.vue`](frontend/src/pages/student/ProfilePage.vue), [`AvailabilityPage.vue`](frontend/src/pages/student/AvailabilityPage.vue)
+
+- Create and update a profile with name, school, programme, year of study,
+  contact number and current courses.
+- Set study preferences: the course a buddy is needed for, preferred meeting
+  mode (in-person, online or either), preferred group size (one-to-one, small
+  group or either), and study goals (concept review, problem solving, exam
+  preparation, project discussion).
+- Declare weekly availability as one or more time slots.
+
+**Study buddy matching** — [`DiscoverPage.vue`](frontend/src/pages/student/DiscoverPage.vue), [`PublicProfilePage.vue`](frontend/src/pages/student/PublicProfilePage.vue)
+
+- Search for buddies by course or study goal, with additional filters for
+  meeting mode and minimum timetable overlap.
+- Receive a ranked list of candidates with an overall weighted match
+  percentage.
+- View another student's public study profile. Their contact number stays
+  hidden until a connection is accepted.
+
+**Match requests and connections** — [`ConnectionsPage.vue`](frontend/src/pages/student/ConnectionsPage.vue), [`MessagesPage.vue`](frontend/src/pages/student/MessagesPage.vue)
+
+- Send a request with an optional message of up to 500 characters, and cancel a
+  request that is still pending.
+- Accept or decline incoming requests. Accepting reveals both students' contact
+  numbers.
+- View active connections and end a connection when it is no longer needed.
+- Real-time chat with active buddies over an authenticated WebSocket/STOMP
+  channel, with persisted history, unread counts and per-student chat deletion.
+  Chat is an extra feature beyond the compulsory requirements.
+
+### Study group leaders
+
+[`GroupsPage.vue`](frontend/src/pages/student/GroupsPage.vue), [`GroupDetails.vue`](frontend/src/components/groups/GroupDetails.vue), [`GroupEditor.vue`](frontend/src/components/groups/GroupEditor.vue)
+
+- Create a study group for a specific course with a name, description, study
+  goals, preferred meeting mode, weekly availability and maximum size.
+- Update group information, or close the group when it is no longer active.
+- View join requests, accept or reject them, and remove a member.
+
+Any student who creates a group becomes its leader, so the role is derived from
+group ownership rather than stored on the account.
+
+### System administrators
+
+[`UsersPage.vue`](frontend/src/pages/admin/UsersPage.vue), [`MatchingPage.vue`](frontend/src/pages/admin/MatchingPage.vue), [`DashboardPage.vue`](frontend/src/pages/admin/DashboardPage.vue)
+
+- Create, update and delete student and administrator accounts.
+- View account status and basic usage information.
+- Enable or disable each matching criterion (course, availability, study mode,
+  study goal, group size) and set its relative weight.
+- Choose the active matching strategy.
+
+### Matching strategies
+
+| Strategy | Behaviour |
+|---|---|
+| Balanced | Splits the weighting equally across every enabled criterion, replacing the configured weights. |
+| Availability-first | Uses the administrator's weights but requires availability to carry the highest weight. |
+| Course-first | Uses the administrator's weights but requires course to carry the highest weight. |
+
+The scoring method and a worked example are documented in
+[backend/matching-service/README.md](backend/matching-service/README.md).
+
+## Architecture
+
+The system is a Vue 3 single-page application talking to five Spring Boot
+services behind an API gateway, over a shared PostgreSQL database hosted on
+Supabase.
+
+```
+                 ┌──────────────────────────┐
+                 │  Vue 3 SPA (Vite, 5173)  │
+                 └────────────┬─────────────┘
+                     /api     │     /ws
+                 ┌────────────▼─────────────┐
+                 │   api-gateway  (8080)    │  verifies JWT, routes requests
+                 └────────────┬─────────────┘
+          ┌───────────────┬───┴────────┬────────────────┐
+          ▼               ▼            ▼                ▼
+   ┌─────────────┐ ┌─────────────┐ ┌──────────────┐ ┌─────────────┐
+   │user-service │ │  matching-  │ │ connection-  │ │   group-    │
+   │   (8081)    │ │   service   │ │   service    │ │   service   │
+   │             │ │   (8083)    │ │   (8084)     │ │   (8085)    │
+   │ accounts    │ │ scoring &   │ │ requests,    │ │ groups,     │
+   │ profiles    │ │ ranking     │ │ connections, │ │ membership, │
+   │ courses     │ │ config      │ │ chat         │ │ join reqs   │
+   └──────┬──────┘ └──────┬──────┘ └──────┬───────┘ └──────┬──────┘
+          │               │               │                │
+          └───────────────┴───────┬───────┴────────────────┘
+                                  ▼
+                   Supabase PostgreSQL (transaction pooler)
+```
+
+`user-service` is the single owner of account, profile and course data. The
+other three services hold their own tables and call `user-service` over HTTP
+through a `StudentClient` when they need profile information, rather than
+reading its tables directly.
+
+### Gateway routes
+
+| Path | Service |
+|---|---|
+| `/api/auth/**`, `/api/users/**`, `/api/students/**`, `/api/courses/**`, `/api/admin/**` | user-service (8081) |
+| `/api/matching/**` | matching-service (8083) |
+| `/api/match-requests/**`, `/api/connections/**` | connection-service (8084) |
+| `/api/groups/**` | group-service (8085) |
+| `/ws` | connection-service (8084), WebSocket upgrade |
+
+Routes are declared in
+[`api-gateway/src/main/resources/application.yml`](backend/api-gateway/src/main/resources/application.yml),
+not hard-coded in Java, so a service can be repointed without a rebuild.
+
+## Design principles
+
+**Layering.** Every service follows the same package structure, so a class's
+responsibility is visible from its location:
+
+| Package | Responsibility |
+|---|---|
+| `controller` | HTTP and STOMP endpoints; request/response mapping and authorization checks only |
+| `service` | Business rules and orchestration |
+| `repository` | JDBC persistence |
+| `model` | Domain entities and enums |
+| `dto` | Data carried across a service boundary |
+| `client` | Outbound calls to another service |
+| `config` | Security, WebSocket and seeding configuration |
+
+**Single Responsibility Principle.** Each service owns one area of the domain,
+and within a service each class owns one job. For example, in matching-service
+[`MatchingEngine`](backend/matching-service/src/main/java/com/studybuddy/matching/engine/MatchingEngine.java)
+only scores and ranks candidates,
+[`MatchingConfigurationService`](backend/matching-service/src/main/java/com/studybuddy/matching/service/MatchingConfigurationService.java)
+only loads and saves the active configuration, and
+[`StudentClient`](backend/matching-service/src/main/java/com/studybuddy/matching/client/StudentClient.java)
+only fetches profiles.
+
+**Strategy pattern.** The three matching strategies implement a shared
+[`MatchingStrategy`](backend/matching-service/src/main/java/com/studybuddy/matching/engine/MatchingStrategy.java)
+interface that decides how criteria are weighted before scoring runs. The engine
+depends on the interface, so a new strategy can be added without changing it.
+
+**Inheritance and polymorphism.** `Student` and `SystemAdministrator` extend an
+abstract
+[`User`](backend/user-service/src/main/java/com/studybuddy/user/model/User.java)
+base class, which carries the shared identity and credential fields while each
+subclass adds its own behaviour.
+
+**Externalized configuration.** No credential, port, URL or secret is compiled
+into the code. Every one is read from an environment variable with a sensible
+local default, through Spring's `application.yml`
+(`${SUPABASE_JDBC_URL:...}`, `${JWT_SECRET:}`, `${CONNECTION_SERVICE_URL:...}`
+and so on). Real values live in a git-ignored `backend/.env`.
+
+**Least privilege for sensitive data.** Contact numbers are served from a
+separate internal endpoint in user-service that is protected by a shared secret
+(`CONTACT_SERVICE_SECRET`), a header the browser never holds.
+connection-service checks the caller's JWT and their membership of an active
+connection before requesting it.
+
+## Open source libraries
+
+### Backend
+
+| Library | Used for | Why |
+|---|---|---|
+| Spring Boot 4.1.1 | Application framework for all five services | Recommended in the project brief; dependency injection and auto-configuration keep the layered structure clean |
+| Spring Cloud Gateway (MVC) 2025.1.3 | API gateway routing | Declarative route configuration, so routes stay in YAML rather than Java |
+| Spring Security + OAuth2 Resource Server | JWT verification in every service | Standard JWT validation rather than hand-rolled token parsing |
+| Spring JDBC (`spring-boot-starter-jdbc`) | Database access | Chosen over JPA/Hibernate so the SQL is explicit and reviewable, which suits a small, well-known schema |
+| PostgreSQL JDBC driver | Supabase connectivity | The database is PostgreSQL |
+| Spring WebSocket + STOMP | Real-time chat | Built into the Spring stack, so chat reuses the same JWT authentication as the REST API |
+| Spring Boot Validation | Request payload validation | Declarative `@Valid` constraints keep validation out of controller bodies |
+| Spring Boot Actuator | `health` and `info` endpoints | Lets the start-up scripts confirm a service is up |
+| Spotless (Maven plugin) | Java formatting for group-service | Pinned formatter version gives consistent results across machines |
+
+### Frontend
+
+| Library | Used for | Why |
+|---|---|---|
+| Vue 3 | UI framework | Composition API suits the shared state in `src/composables/` |
+| Vue Router 4 | Routing and role-based route guards | Official router; `meta.role` guards keep student and admin areas separate |
+| Vite 8 | Dev server and build | Fast hot reload, and its dev proxy removes the need for CORS configuration in development |
+| `@stomp/stompjs` | STOMP client for chat | Matches the Spring STOMP broker on the backend |
+| `lucide-vue-next` | Icons | Consistent icon set with a Vue 3 build |
+| Prettier | Frontend formatting | Scoped to the Study Groups files via `prettier.groups.json` |
+
+## Getting started
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 22.22.2+, 24.15.0+, or 26+ (including UI tests)
+- **JDK 21** (Maven itself is not needed; the repository ships the Maven
+  wrapper, `mvnw` / `mvnw.cmd`)
+- **Node.js** 20.19+ or 22.12+ (required by Vite 8 and `@vitejs/plugin-vue`)
+- **Python 3.9+**, only if you use the `scripts/` runners
+- A **Supabase** PostgreSQL project, or a local PostgreSQL database
 
-### Setup
+### 1. Configure the backend
+
+Copy [`backend/.env.example`](backend/.env.example) to `backend/.env` and fill
+in your values. The file is git-ignored; never commit real credentials.
+[backend/README.md](backend/README.md) explains every variable, where to find
+the Supabase values, and which services create their own tables.
+
+You will also need `JWT_SECRET` and `CONTACT_SERVICE_SECRET`. If you are
+joining an existing setup, get the team's current values from a teammate rather
+than generating your own — they must match across machines. See
+[The two secrets](backend/README.md#the-two-secrets).
+
+### 2. Install frontend dependencies
 
 ```bash
 cd frontend
 npm install
 ```
 
-> The project also has a `pnpm-lock.yaml`, so `pnpm install` works too if you have pnpm set up. `npm install` is the simplest option if you don't.
+The project also has a `pnpm-lock.yaml`, so `pnpm install` works if you have
+pnpm set up. `npm install` is the simplest option if you don't.
 
-### Run the dev server
+## Running the application
 
-```bash
-cd frontend
-npm run dev
-```
-
-This starts Vite's dev server (default: [http://localhost:5173](http://localhost:5173)) with hot reload.
-
-### Other commands
-
-```bash
-npm run build    # build for production (outputs to frontend/dist)
-npm run start    # preview the production build locally
-```
-
-## Backend
-
-The backend lives in [backend/](backend/) and is made up of Spring Boot services that share a Supabase PostgreSQL database. Supabase configuration, JWT secrets, and demo account/course seeding are documented in [backend/README.md](backend/README.md).
-
-### Prerequisites
-
-- JDK 21
-- A `backend/.env` file with your Supabase and JWT values (copy [backend/.env.example](backend/.env.example) and fill it in — see [backend/README.md](backend/README.md))
-
-Maven does not need to be installed; the scripts use the bundled Maven wrapper (`mvnw.cmd`). The first start downloads Maven and the dependencies, so it takes a few minutes.
-
-### Run locally with cloud Supabase (macOS / Linux)
-
-Use Python 3.9 or newer. Install the frontend dependencies, then configure `backend/.env` using [backend/.env.example](backend/.env.example). The database must already have the project tables; see [the backend setup](backend/README.md).
-
-From the repository root:
-
-```bash
-python3 scripts/start-cloud.py
-```
-
-This starts the frontend at `http://127.0.0.1:5173` and all five backend services using your cloud database. Sign in with an existing cloud account. It does not seed data or create tables. Ctrl-C stops the local processes and keeps cloud data.
-
-`python3 scripts/group-local.py demo` is a separate, disposable test environment. Its Alice/Bob/Carol accounts and groups exist only in temporary local PostgreSQL and are removed when that runner stops.
-
-### Start the backend (Windows, PowerShell)
+### Windows (PowerShell)
 
 From the `backend` folder:
 
 ```powershell
 cd backend
-.\start-backend.ps1 -All   # all services, including study groups
+.\start-backend.ps1 -All
 ```
 
-Study groups requires `-All`. Running the script without it starts only user-service, api-gateway and matching-service.
+`-All` starts all five services. **Use it** unless you only need matching:
+without it the script starts just user-service, api-gateway and
+matching-service, which leaves connection requests, Messages/chat and study
+groups non-functional.
 
-The script builds the project once, then opens each service in its own tab of a Windows Terminal window named "backend" (or in separate PowerShell windows if Windows Terminal isn't installed). Each tab shows that service's logs.
+The script builds the project once, then opens each service in its own tab of a
+Windows Terminal window named "backend" (or in separate PowerShell windows if
+Windows Terminal isn't installed). Each tab shows that service's logs. The first
+start downloads Maven and the dependencies, so it takes a few minutes.
 
 | Service | Port |
 |---|---|
@@ -79,33 +272,121 @@ The script builds the project once, then opens each service in its own tab of a 
 | connection-service | 8084 |
 | group-service | 8085 |
 
-The frontend talks to the API gateway on port `8080`, so start the backend before using the frontend.
+Then start the frontend in a separate terminal:
 
-If PowerShell says running scripts is disabled, run:
+```bash
+cd frontend
+npm run dev
+```
+
+Vite serves the app at [http://localhost:5173](http://localhost:5173) and
+proxies `/api` to the gateway on port 8080 and `/ws` to connection-service on
+port 8084. Start the backend first.
+
+If PowerShell says running scripts is disabled:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start-backend.ps1 -All
 ```
 
-> Open the `.ps1` file from a PowerShell prompt — double-clicking it in File Explorer just opens it in Notepad.
+> Open the `.ps1` file from a PowerShell prompt — double-clicking it in File
+> Explorer just opens it in Notepad.
 
-### Stop the backend
+**Stopping:** run `.\stop-backend.ps1` from the `backend` folder. It stops every
+service listening on the backend ports and prints which ones it stopped. You can
+then close the "backend" Terminal window. To stop a single service instead,
+press **Ctrl+C** in its tab. Run `stop-backend.ps1` if a start fails with
+`Port 8081 was already in use` — that means a service from an earlier run is
+still going.
 
-From the `backend` folder:
+### macOS / Linux
 
-```powershell
-.\stop-backend.ps1
+From the repository root:
+
+```bash
+python3 scripts/start-cloud.py
 ```
 
-This stops every service listening on the backend ports and prints which ones it stopped. You can then close the "backend" Terminal window. To stop a single service instead, press **Ctrl+C** in its tab (or close the tab).
+This starts the frontend at `http://127.0.0.1:5173` and all five backend
+services against the database configured in `backend/.env`. It forces demo
+seeding and automatic schema initialization off, so it neither seeds data nor
+creates tables — sign in with an account that already exists. Ctrl-C stops the
+local processes and leaves cloud data untouched.
 
-Run `stop-backend.ps1` if a start fails with `Port 8081 was already in use` — it means a service from an earlier run is still running.
-
-### Run one service manually
+### Running a single service
 
 ```powershell
 cd backend
 .\mvnw.cmd -pl user-service spring-boot:run
 ```
 
-Replace `user-service` with the service you want to start.
+Replace `user-service` with the service you want. On macOS/Linux use `./mvnw`.
+
+### Other frontend commands
+
+```bash
+npm run build    # production build, outputs to frontend/dist
+npm run start    # preview the production build locally
+```
+
+## Demo data
+
+The project brief requires at least 10 courses and 50 student profiles. The
+seeder in
+[`DemoDataSeeder.java`](backend/user-service/src/main/java/com/studybuddy/user/config/DemoDataSeeder.java)
+inserts exactly that — 10 courses, 50 students with generated preferences and
+availability, and one administrator — but it is **opt-in** and off by default.
+
+Turn it on in `backend/.env`:
+
+```text
+DEMO_DATA_ENABLED=true
+SEED_ADMIN_EMAIL=admin@studybuds.sg
+SEED_ADMIN_PASSWORD=<at least 8 characters>
+SEED_STUDENT_PASSWORD=<at least 8 characters>
+```
+
+Students are `student01@smu.edu.sg` through `student50@smu.edu.sg`, all using
+`SEED_STUDENT_PASSWORD`, spread across Computing, Business, Accountancy,
+Economics, Law and Social Sciences. Full details are in
+[backend/README.md](backend/README.md#demo-population).
+
+`python3 scripts/group-local.py demo` is a separate, disposable environment for
+study-group testing. Its Alice/Bob/Carol accounts live only in a temporary local
+PostgreSQL database and are removed when the runner stops.
+
+## Repository layout
+
+```
+StudyBuddyMatcher/
+├── backend/
+│   ├── api-gateway/          routing and JWT verification
+│   ├── user-service/         accounts, profiles, courses, auth, demo seeder
+│   ├── matching-service/     scoring engine, strategies, admin configuration
+│   ├── connection-service/   match requests, connections, real-time chat
+│   ├── group-service/        study groups, membership, join requests
+│   ├── .env.example          template for the git-ignored backend/.env
+│   ├── start-backend.ps1     starts the services (Windows)
+│   └── stop-backend.ps1      stops them again
+├── frontend/
+│   └── src/
+│       ├── pages/student/    Discover, Connections, Messages, Groups, Profile…
+│       ├── pages/admin/      Dashboard, Users, Matching configuration
+│       ├── composables/      shared reactive state (auth, matching, chat…)
+│       ├── components/       dialogs, navigation, group editor
+│       └── services/api.js   single place where HTTP calls are made
+└── scripts/                  Python runners for cloud and local demos
+```
+
+## Further documentation
+
+| Document | Covers |
+|---|---|
+| [backend/README.md](backend/README.md) | Supabase setup, every environment variable, schema initialization, full API summary |
+| [backend/api-gateway/README.md](backend/api-gateway/README.md) | Routing table, JWT verification, authorization rules |
+| [backend/user-service/README.md](backend/user-service/README.md) | Account model and inheritance, JWT claims, profile and admin APIs, seeding |
+| [backend/matching-service/README.md](backend/matching-service/README.md) | How the match percentage is calculated, criteria, strategies, the engine's classes |
+| [backend/connection-service/README.md](backend/connection-service/README.md) | Match requests, connections, chat database and WebSocket configuration |
+| [backend/group-service/README.md](backend/group-service/README.md) | The leader role, group business rules, the manually applied schema |
+| [backend/connection-service/CHAT_README.md](backend/connection-service/CHAT_README.md) | Class-by-class walkthrough of the chat feature with flow diagrams |
+| [CHANGES_README.md](CHANGES_README.md) | Log of connection-request and study-group changes |

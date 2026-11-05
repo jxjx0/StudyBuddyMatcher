@@ -150,17 +150,18 @@ conversation again.
 - The built-in broker is in-memory and intended for one connection-service
   instance. Multiple instances require a shared broker.
 
-## Database migrations
+## Database tables
 
-Apply migrations 003 and 004 once in the Supabase SQL Editor using a
-database-owner connection:
+Chat needs two tables, and both are created by the service's own
+[`schema.sql`](./src/main/resources/schema.sql) on startup unless
+`SPRING_SQL_INIT_MODE=never` is set:
 
-- [`migrations/003_create_chat_messages.sql`](./migrations/003_create_chat_messages.sql)
-- [`migrations/004_create_chat_deletions.sql`](./migrations/004_create_chat_deletions.sql)
+- `connection_chat_messages` — persisted history, keyed by connection
+- `connection_chat_deletions` — which student has hidden which conversation
 
-Use backend JDBC credentials for the running service, not database-owner
-credentials. See the [connection-service README](./README.md) for
-configuration.
+There are no separate migration files to apply. Use the backend JDBC
+credentials for the running service, not database-owner credentials. See the
+[connection-service README](./README.md) for configuration.
 
 ## Related implementation
 
