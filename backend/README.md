@@ -202,7 +202,9 @@ temporary values and never reuse them in a deployed environment.
 ## Running
 
 Use JDK 21. Maven does not need to be installed — the repository ships the
-wrapper.
+wrapper: `mvnw.cmd` on Windows, `mvnw` on macOS and Linux. If the wrapper will
+not execute after cloning on macOS or Linux, restore its executable bit once
+with `chmod +x mvnw`.
 
 The easiest options are the scripts described in the
 [project README](../README.md#running-the-application):
@@ -221,7 +223,20 @@ cd backend
 .\mvnw.cmd -pl group-service spring-boot:run
 ```
 
-On macOS/Linux use `./mvnw` instead of `.\mvnw.cmd`.
+On macOS and Linux the same five commands use `./mvnw`:
+
+```sh
+cd backend
+./mvnw -pl user-service spring-boot:run
+./mvnw -pl api-gateway spring-boot:run
+./mvnw -pl matching-service spring-boot:run
+./mvnw -pl connection-service spring-boot:run
+./mvnw -pl group-service spring-boot:run
+```
+
+Start `user-service` first, because the other services call it. Stop a service
+with Ctrl-C in its own terminal; on Windows, `stop-backend.ps1` stops all of
+them at once.
 
 The frontend's Vite server proxies `/api` to `http://localhost:8080` and `/ws`
 to `http://localhost:8084`. Override them with `VITE_API_TARGET` and

@@ -15,6 +15,8 @@ engine.
 - [Architecture](#architecture)
 - [Design principles](#design-principles)
 - [Open source libraries](#open-source-libraries)
+- [How the team divided the work](#how-the-team-divided-the-work)
+- [How AI was used](#how-ai-was-used)
 - [Getting started](#getting-started)
 - [Running the application](#running-the-application)
 - [Demo data](#demo-data)
@@ -115,7 +117,7 @@ Supabase.
           │               │               │                │
           └───────────────┴───────┬───────┴────────────────┘
                                   ▼
-                   Supabase PostgreSQL (transaction pooler)
+                Supabase PostgreSQL (session pooler, 5432)
 ```
 
 `user-service` is the single owner of account, profile and course data. The
@@ -211,15 +213,54 @@ connection before requesting it.
 | `lucide-vue-next` | Icons | Consistent icon set with a Vue 3 build |
 | Prettier | Frontend formatting | Scoped to the Study Groups files via `prettier.groups.json` |
 
+## How the team divided the work
+
+Work was split by domain class, so each member owned the model, service and
+repository code for their area end to end.
+
+| Member | Area |
+|---|---|
+| Shannon | `User`, `SystemAdministrator`, login and authentication (Spring Security / JWT), Supabase |
+| Aaralyn | Frontend setup, `Student`, `Course` |
+| Jessica | `MatchRequest`, `StudyBuddyConnection`, `TimeSlot` |
+| Lwin | `StudyGroup`, `GroupJoinRequest` |
+| Jing Xiang & Henry | The matching engine, built collaboratively: `MatchingEngine`, `MatchingConfig`, `MatchingCriterion`, `SearchCriteria`, `MatchResult`, and `MatchingStrategy` with its three implementations. Jing Xiang also did the backend setup. |
+
+## How AI was used
+
+AI assistance was used in the following ways, and every generated change was
+reviewed by a team member before it was kept:
+
+- Building the baseline for the backend.
+- Building the design and baseline for the frontend.
+- Manually reviewing AI-generated code to confirm the implementation matches
+  the requirements.
+- Optimising existing code.
+
 ## Getting started
 
 ### Prerequisites
+
+The team works across Windows and macOS, and everything below runs on
+Windows, macOS and Linux unless a section says otherwise.
 
 - **JDK 21** (Maven itself is not needed; the repository ships the Maven
   wrapper, `mvnw` / `mvnw.cmd`)
 - **Node.js** 20.19+ or 22.12+ (required by Vite 8 and `@vitejs/plugin-vue`)
 - **Python 3.9+**, only if you use the `scripts/` runners
 - A **Supabase** PostgreSQL project, or a local PostgreSQL database
+
+Which command form to use:
+
+| | Windows (PowerShell) | macOS / Linux |
+|---|---|---|
+| Maven wrapper | `.\mvnw.cmd` | `./mvnw` |
+| Start everything | `backend\start-backend.ps1 -All` | `python3 scripts/start-cloud.py` |
+| Stop everything | `backend\stop-backend.ps1` | Ctrl-C in the runner |
+| Python | `python` | `python3` |
+
+On macOS and Linux, if the wrapper will not run after cloning, restore its
+executable bit once with `chmod +x backend/mvnw`.
 
 ### 1. Configure the backend
 
@@ -313,6 +354,28 @@ seeding and automatic schema initialization off, so it neither seeds data nor
 creates tables — sign in with an account that already exists. Ctrl-C stops the
 local processes and leaves cloud data untouched.
 
+Two things to know before you run it:
+
+- It requires a **cloud Supabase** URL. The script rejects any
+  `SUPABASE_JDBC_URL` whose host is not `*.supabase.co` or `*.supabase.com`,
+  so it cannot be pointed at a local PostgreSQL database.
+- It does **not** run on Windows; it exits and tells you to use
+  `start-backend.ps1 -All` instead.
+
+If you would rather start the services yourself on macOS or Linux, open five
+terminals in `backend/` and run one service in each:
+
+```sh
+./mvnw -pl user-service spring-boot:run
+./mvnw -pl api-gateway spring-boot:run
+./mvnw -pl matching-service spring-boot:run
+./mvnw -pl connection-service spring-boot:run
+./mvnw -pl group-service spring-boot:run
+```
+
+Start `user-service` first — the others call it. Then run `npm run dev` in
+`frontend/` as on Windows, and stop each service with Ctrl-C in its terminal.
+
 ### Running a single service
 
 ```powershell
@@ -354,6 +417,13 @@ Economics, Law and Social Sciences. Full details are in
 `python3 scripts/group-local.py demo` is a separate, disposable environment for
 study-group testing. Its Alice/Bob/Carol accounts live only in a temporary local
 PostgreSQL database and are removed when the runner stops.
+
+**macOS / Linux only.** This runner uses POSIX process groups and needs a local
+PostgreSQL 17 installation; set `PG_BIN` to the directory holding `initdb`,
+`pg_ctl` and `psql` if it is not found automatically. It does not run on
+Windows — on Windows use `start-backend.ps1 -All` with the shared database
+instead. It also seeds only two courses and three accounts, so it is a test
+harness, not the demo described above.
 
 ## Repository layout
 

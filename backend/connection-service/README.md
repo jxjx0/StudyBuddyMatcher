@@ -98,3 +98,17 @@ Allowed browser origins default to `http://localhost:5173` and
 serves the frontend on `127.0.0.1`. Set `CHAT_ALLOWED_ORIGINS` to a
 comma-separated list for other deployments. Do not use a wildcard in
 production.
+
+## Running this service alone
+
+From `backend`:
+
+```powershell
+.\mvnw.cmd -pl connection-service spring-boot:run
+```
+
+On macOS and Linux use `./mvnw -pl connection-service spring-boot:run`.
+
+On Windows, `start-backend.ps1` only starts this service when you pass `-All`,
+so match requests, connections and chat stay unavailable without it. On
+macOS and Linux, `scripts/start-cloud.py` always starts it.

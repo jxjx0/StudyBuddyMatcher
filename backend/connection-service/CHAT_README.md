@@ -133,6 +133,10 @@ conversation again.
   and sends require active membership; HTTP history and deletion require
   participant membership. The sender ID always comes from the authenticated
   principal.
+- No `schema.sql` enables row-level security on these tables (group-service is
+  the only service whose schema does). The browser never reaches them
+  directly: every read and write goes through connection-service, which
+  authorizes the caller's JWT first.
 
 ## Routing and deployment
 
