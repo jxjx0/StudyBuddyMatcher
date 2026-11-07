@@ -198,6 +198,7 @@ connection before requesting it.
 | Spring JDBC (`spring-boot-starter-jdbc`) | Database access | Chosen over JPA/Hibernate so the SQL is explicit and reviewable, which suits a small, well-known schema |
 | PostgreSQL JDBC driver | Supabase connectivity | The database is PostgreSQL |
 | Spring WebSocket + STOMP | Real-time chat | Built into the Spring stack, so chat reuses the same JWT authentication as the REST API |
+| Spring RestClient (`spring-boot-starter-restclient`) | Service-to-service HTTP calls | The synchronous client in the Spring stack; each `StudentClient` uses it to read profiles from user-service |
 | Spring Boot Validation | Request payload validation | Declarative `@Valid` constraints keep validation out of controller bodies |
 | Spring Boot Actuator | `health` and `info` endpoints | Lets the start-up scripts confirm a service is up |
 | Spotless (Maven plugin) | Java formatting for group-service | Pinned formatter version gives consistent results across machines |
@@ -209,6 +210,7 @@ connection before requesting it.
 | Vue 3 | UI framework | Composition API suits the shared state in `src/composables/` |
 | Vue Router 4 | Routing and role-based route guards | Official router; `meta.role` guards keep student and admin areas separate |
 | Vite 8 | Dev server and build | Fast hot reload, and its dev proxy removes the need for CORS configuration in development |
+| `@vitejs/plugin-vue` | Vite plugin for single-file components | Official Vue plugin; compiles `.vue` files in the Vite build |
 | `@stomp/stompjs` | STOMP client for chat | Matches the Spring STOMP broker on the backend |
 | `lucide-vue-next` | Icons | Consistent icon set with a Vue 3 build |
 | Prettier | Frontend formatting | Scoped to the Study Groups files via `prettier.groups.json` |
