@@ -147,9 +147,7 @@ service-role key in Vue/Vite variables or anywhere else the browser can read.
 ## Schema initialization
 
 Every service runs its own `schema.sql` on startup, so a brand-new database
-needs almost no manual setup. The one exception is `connection_chat_reads`,
-which no `schema.sql` creates — see
-[`connection_chat_reads` is not created for you](connection-service/README.md#connection_chat_reads-is-not-created-for-you).
+needs no manual setup.
 
 To switch this off, set `SPRING_SQL_INIT_MODE=never` as a real environment
 variable. Spring maps it onto `spring.sql.init.mode` for every service, which

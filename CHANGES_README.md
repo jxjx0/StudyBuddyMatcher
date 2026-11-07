@@ -46,9 +46,8 @@ Unless `SPRING_SQL_INIT_MODE=never` is set, the service creates its tables on
 startup from
 [schema.sql](./backend/connection-service/src/main/resources/schema.sql).
 That file now permits the `CANCELLED` status and creates the chat and
-chat-deletion tables. One table is still missing from it: `connection_chat_reads`,
-which backs unread counts, has to be created by hand on a fresh database — see
-[the connection-service README](./backend/connection-service/README.md#connection_chat_reads-is-not-created-for-you).
+chat-deletion tables, plus `connection_chat_reads` for unread counts, so a
+fresh database needs no further steps.
 
 The reported HTTP 500 on request cancellation was caused by the database
 rejecting `CANCELLED` under the status constraint `match_requests` had at the

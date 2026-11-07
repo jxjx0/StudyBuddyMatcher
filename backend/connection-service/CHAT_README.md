@@ -122,11 +122,7 @@ conversation again.
 
 - `connection_chat_messages` stores message ID, connection ID, sender ID,
   content, and database-generated timestamp.
-- `connection_chat_reads` stores each student's last-read timestamp. **No
-  `schema.sql` creates this table** — it exists on the shared Supabase
-  database because it was added by hand. See
-  [`connection_chat_reads` is not created for you](./README.md#connection_chat_reads-is-not-created-for-you)
-  for the DDL to run on a fresh database.
+- `connection_chat_reads` stores each student's last-read timestamp.
 - `connection_chat_deletions` stores the per-student history cutoff.
 - Reopening a connection reuses its connection ID, so messages and deletion
   cutoffs remain associated with the same conversation.
@@ -157,17 +153,13 @@ conversation again.
 
 ## Database tables
 
-Chat uses three tables. Two are created by the service's own
+Chat needs three tables, and all three are created by the service's own
 [`schema.sql`](./src/main/resources/schema.sql) on startup unless
 `SPRING_SQL_INIT_MODE=never` is set:
 
 - `connection_chat_messages` — persisted history, keyed by connection
 - `connection_chat_deletions` — which student has hidden which conversation
-
-The third, `connection_chat_reads`, is **not** created by any `schema.sql`.
-Unread counts and mark-read fail on a database where it is missing; the DDL is
-in the
-[connection-service README](./README.md#connection_chat_reads-is-not-created-for-you).
+- `connection_chat_reads` — each student's last-read time, used for unread counts
 
 There are no separate migration files to apply. Use the backend JDBC
 credentials for the running service, not database-owner credentials. See the
