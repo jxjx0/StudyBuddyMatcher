@@ -54,3 +54,11 @@ CREATE TABLE IF NOT EXISTS connection_chat_deletions (
     deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (connection_id, student_id)
 );
+
+CREATE TABLE IF NOT EXISTS connection_chat_reads (
+    connection_id UUID NOT NULL
+        REFERENCES study_buddy_connections (connection_id) ON DELETE CASCADE,
+    student_id UUID NOT NULL,
+    last_read_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (connection_id, student_id)
+);

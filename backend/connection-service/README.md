@@ -36,7 +36,7 @@ backend only. For local development the defaults point to
 
 On startup it runs
 [`src/main/resources/schema.sql`](src/main/resources/schema.sql), which creates
-all four of its tables if they do not already exist:
+all five of its tables if they do not already exist:
 
 | Table | Holds |
 |---|---|
@@ -44,6 +44,7 @@ all four of its tables if they do not already exist:
 | `study_buddy_connections` | Established connections and whether they are still active |
 | `connection_chat_messages` | Persisted chat history |
 | `connection_chat_deletions` | Which student has hidden which conversation |
+| `connection_chat_reads` | Each student's last-read time per conversation, used for unread counts |
 
 Set `SPRING_SQL_INIT_MODE=never` to skip this. Note that this variable affects
 **only this service** — see
@@ -53,8 +54,8 @@ README for what the other services do.
 Everything the service needs is in that one `schema.sql`; there are no separate
 migration files to apply. If you are connecting to a database created by an
 older version of this project, compare its `match_requests` status constraint
-and check that `connection_chat_messages` and `connection_chat_deletions`
-exist — re-running `schema.sql` is safe, but it will not alter an existing
+and check that `connection_chat_messages`, `connection_chat_deletions` and
+`connection_chat_reads` exist — re-running `schema.sql` is safe, but it will not alter an existing
 table's constraints.
 
 ## Real-time chat
