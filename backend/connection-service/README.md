@@ -55,8 +55,8 @@ Everything the service needs is in that one `schema.sql`; there are no separate
 migration files to apply. If you are connecting to a database created by an
 older version of this project, compare its `match_requests` status constraint
 and check that `connection_chat_messages`, `connection_chat_deletions` and
-`connection_chat_reads` exist — re-running `schema.sql` is safe, but it will not alter an existing
-table's constraints.
+`connection_chat_reads` exist — re-running `schema.sql` is safe, but it will
+not alter an existing table's constraints.
 
 ## Real-time chat
 
