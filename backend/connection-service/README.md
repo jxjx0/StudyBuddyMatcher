@@ -36,26 +36,54 @@ backend only. For local development the defaults point to
 
 On startup it runs
 [`src/main/resources/schema.sql`](src/main/resources/schema.sql), which creates
-all four of its tables if they do not already exist:
+four of the five tables this service uses, if they do not already exist:
 
-| Table | Holds |
-|---|---|
-| `match_requests` | Requests and their `PENDING` / `ACCEPTED` / `DECLINED` / `CANCELLED` status |
-| `study_buddy_connections` | Established connections and whether they are still active |
-| `connection_chat_messages` | Persisted chat history |
-| `connection_chat_deletions` | Which student has hidden which conversation |
+| Table | Holds | Created on startup? |
+|---|---|---|
+| `match_requests` | Requests and their `PENDING` / `ACCEPTED` / `DECLINED` / `CANCELLED` status | Yes |
+| `study_buddy_connections` | Established connections and whether they are still active | Yes |
+| `connection_chat_messages` | Persisted chat history | Yes |
+| `connection_chat_deletions` | Which student has hidden which conversation | Yes |
+| `connection_chat_reads` | Each student's last-read timestamp, used for unread counts | **No** |
 
 Set `SPRING_SQL_INIT_MODE=never` to skip this. Note that this variable affects
 **only this service** — see
 [Schema initialization](../README.md#schema-initialization) in the backend
 README for what the other services do.
 
-Everything the service needs is in that one `schema.sql`; there are no separate
-migration files to apply. If you are connecting to a database created by an
-older version of this project, compare its `match_requests` status constraint
-and check that `connection_chat_messages` and `connection_chat_deletions`
-exist — re-running `schema.sql` is safe, but it will not alter an existing
-table's constraints.
+### `connection_chat_reads` is not created for you
+
+[`ChatMessageRepository`](src/main/java/com/studybuddy/connection/repository/ChatMessageRepository.java)
+reads this table when building chat summaries and writes it when marking a
+conversation read, but no `schema.sql` creates it. It exists on the team's
+shared Supabase database because it was added there by hand, so this is
+invisible day to day.
+
+On a brand-new database the service still starts, and sending and loading
+individual messages still work, but two endpoints fail:
+
+- `GET /api/connections/chats` — the whole **Messages** tab
+- `POST /api/connections/{connectionId}/read` — marking a conversation read
+
+Create it once before using chat on a fresh database. The composite primary key
+is required, because `markRead` relies on
+`ON CONFLICT (connection_id, student_id)`:
+
+```sql
+CREATE TABLE IF NOT EXISTS connection_chat_reads (
+    connection_id UUID NOT NULL
+        REFERENCES study_buddy_connections (connection_id) ON DELETE CASCADE,
+    student_id UUID NOT NULL,
+    last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (connection_id, student_id)
+);
+```
+
+There are no separate migration files to apply. If you are connecting to a
+database created by an older version of this project, compare its
+`match_requests` status constraint and check that `connection_chat_messages`
+and `connection_chat_deletions` exist — re-running `schema.sql` is safe, but it
+will not alter an existing table's constraints.
 
 ## Real-time chat
 
@@ -97,3 +125,17 @@ Allowed browser origins default to `http://localhost:5173` and
 serves the frontend on `127.0.0.1`. Set `CHAT_ALLOWED_ORIGINS` to a
 comma-separated list for other deployments. Do not use a wildcard in
 production.
+
+## Running this service alone
+
+From `backend`:
+
+```powershell
+.\mvnw.cmd -pl connection-service spring-boot:run
+```
+
+On macOS and Linux use `./mvnw -pl connection-service spring-boot:run`.
+
+On Windows, `start-backend.ps1` only starts this service when you pass `-All`,
+so match requests, connections and chat stay unavailable without it. On
+macOS and Linux, `scripts/start-cloud.py` always starts it.

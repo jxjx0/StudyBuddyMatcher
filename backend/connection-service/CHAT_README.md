@@ -122,8 +122,11 @@ conversation again.
 
 - `connection_chat_messages` stores message ID, connection ID, sender ID,
   content, and database-generated timestamp.
-- `connection_chat_reads` stores each student's last-read timestamp. This
-  table already exists in the shared Supabase database.
+- `connection_chat_reads` stores each student's last-read timestamp. **No
+  `schema.sql` creates this table** — it exists on the shared Supabase
+  database because it was added by hand. See
+  [`connection_chat_reads` is not created for you](./README.md#connection_chat_reads-is-not-created-for-you)
+  for the DDL to run on a fresh database.
 - `connection_chat_deletions` stores the per-student history cutoff.
 - Reopening a connection reuses its connection ID, so messages and deletion
   cutoffs remain associated with the same conversation.
@@ -134,8 +137,10 @@ conversation again.
   and sends require active membership; HTTP history and deletion require
   participant membership. The sender ID always comes from the authenticated
   principal.
-- Migrations 003 and 004 enable row-level security and revoke access from
-  browser roles.
+- No `schema.sql` enables row-level security on these tables (group-service is
+  the only service whose schema does). The browser never reaches them
+  directly: every read and write goes through connection-service, which
+  authorizes the caller's JWT first.
 
 ## Routing and deployment
 
@@ -152,12 +157,17 @@ conversation again.
 
 ## Database tables
 
-Chat needs two tables, and both are created by the service's own
+Chat uses three tables. Two are created by the service's own
 [`schema.sql`](./src/main/resources/schema.sql) on startup unless
 `SPRING_SQL_INIT_MODE=never` is set:
 
 - `connection_chat_messages` — persisted history, keyed by connection
 - `connection_chat_deletions` — which student has hidden which conversation
+
+The third, `connection_chat_reads`, is **not** created by any `schema.sql`.
+Unread counts and mark-read fail on a database where it is missing; the DDL is
+in the
+[connection-service README](./README.md#connection_chat_reads-is-not-created-for-you).
 
 There are no separate migration files to apply. Use the backend JDBC
 credentials for the running service, not database-owner credentials. See the
